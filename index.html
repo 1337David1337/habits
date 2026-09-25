@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Дашборд</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#1F6B5A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Привычки">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root {
+  --paper:#F1F3EF; --surface:#FAFBF8; --ink:#15201D; --ink-soft:#4C5A55; --ink-faint:#6F7B76;
+  --rule:#D5DBD2; --rule-soft:#E3E7DF; --pine:#1F6B5A; --pine-ink:#FAFBF8; --gold:#7F600F;
+  --s0:#E3E7DF; --s1:#C9DFD6; --s2:#8FBFAE; --s3:#4B967F; --s4:#1F6B5A;
+  --tip-bg:#15201D; --tip-ink:#F1F3EF;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark) { :root {
+  --paper:#111613; --surface:#19201C; --ink:#E7EBE5; --ink-soft:#A3AFA8; --ink-faint:#86938C;
+  --rule:#2D3731; --rule-soft:#232C27; --pine:#62C3A8; --pine-ink:#0F1512; --gold:#D8B152;
+  --s0:#232C27; --s1:#23443A; --s2:#2F6A58; --s3:#469C82; --s4:#62C3A8;
+  --tip-bg:#E7EBE5; --tip-ink:#111613;
+  color-scheme:dark;
+} }
+* { box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; }
+body { margin:0; background:var(--paper); color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif; font-size:16px; line-height:1.55;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+.wrap { max-width:880px; margin:0 auto; padding-inline:max(18px, env(safe-area-inset-left,0px)); padding-block:0 64px; }
+h1,h2,h3 { font-family:Archivo,"Helvetica Neue",Arial,sans-serif; margin:0; line-height:1.15; text-wrap:balance; }
+.eyebrow { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-faint); }
+button, input, select { font:inherit; color:inherit; }
+button { cursor:pointer; }
+a { color:var(--pine); }
+:focus-visible { outline:2px solid var(--pine); outline-offset:2px; }
+[hidden] { display:none !important; }
+
+header.top { padding-block:36px 22px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid var(--rule); }
+.top-row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+header.top h1 { font-size:clamp(30px,6vw,44px); font-weight:700; letter-spacing:-.025em; }
+header.top h1::first-letter { text-transform:uppercase; }
+.lede { margin:0; color:var(--ink-soft); font-size:16px; }
+.lede b { font-family:Archivo,sans-serif; font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums; }
+
+.sync { display:inline-flex; align-items:center; gap:7px; font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+  color:var(--ink-faint); background:none; border:1px solid var(--rule); border-radius:20px; padding:3px 10px 3px 8px; }
+.sync::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--rule); }
+.sync.ok::before { background:var(--pine); }
+.sync.busy::before { background:var(--ink-faint); animation:pulse 1s ease-in-out infinite; }
+.sync.warn { color:var(--gold); border-color:var(--gold); }
+.sync.warn::before { background:var(--gold); }
+@keyframes pulse { 50% { opacity:.3; } }
+
+.notice { margin-top:18px; padding:10px 14px; border:1px solid var(--gold); color:var(--gold);
+  border-radius:3px; font-size:14.5px; background:var(--surface); }
+
+section { padding-block:36px 0; }
+.sec-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px 16px;
+  border-top:2px solid var(--ink); padding-top:12px; margin-bottom:16px; }
+.sec-head h2 { font-size:22px; font-weight:600; letter-spacing:-.015em; }
+.sec-head .aside { font-size:13.5px; color:var(--ink-faint); }
+
+/* Сегодня */
+ul.today { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.hab { width:100%; display:grid; grid-template-columns:30px 1fr auto; align-items:center; gap:14px;
+  text-align:left; padding:13px 16px; background:var(--surface); border:1px solid var(--rule-soft);
+  border-radius:4px; transition:border-color .15s; -webkit-tap-highlight-color:transparent; }
+.hab:hover { border-color:var(--rule); }
+.tick { width:28px; height:28px; border-radius:50%; border:2px solid var(--rule); display:grid; place-items:center;
+  transition:background .15s, border-color .15s; }
+.tick svg { width:15px; height:15px; opacity:0; transition:opacity .15s; }
+.hab[aria-pressed="true"] .tick { background:var(--pine); border-color:var(--pine); }
+.hab[aria-pressed="true"] .tick svg { opacity:1; }
+.hab[aria-pressed="true"] .hab-name { color:var(--ink-soft); }
+.hab-main { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.hab-name { font-family:Archivo,sans-serif; font-weight:600; font-size:16.5px; letter-spacing:-.01em; }
+.hab-meta { font-size:13.5px; color:var(--ink-faint); }
+.warn-t { color:var(--gold); } .ok-t { color:var(--pine); }
+.dots { display:flex; gap:4px; }
+.dots i { width:9px; height:9px; border-radius:50%; border:1.5px solid var(--rule); }
+.dots i.on { background:var(--pine); border-color:var(--pine); }
+.empty { color:var(--ink-faint); font-size:15px; padding:6px 0; margin:0; list-style:none; }
+
+/* Неделя */
+.nav { display:flex; align-items:center; gap:6px; }
+.nav button { border:1px solid var(--rule); background:var(--surface); border-radius:3px; padding:3px 10px;
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px; }
+.nav button:disabled { opacity:.4; cursor:default; }
+#week-label { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-soft); min-width:118px; text-align:center; }
+.scroll { overflow-x:auto; }
+table.week { border-collapse:collapse; width:100%; min-width:520px; font-variant-numeric:tabular-nums; }
+.week th, .week td { padding:6px 4px; text-align:center; border-bottom:1px solid var(--rule-soft); }
+.week th { font-family:"IBM Plex Mono",monospace; font-weight:500; font-size:11.5px; color:var(--ink-faint); line-height:1.3; }
+.week th.is-today { color:var(--pine); }
+.week th .ch { display:block; font-size:9.5px; letter-spacing:.06em; opacity:.85; }
+.week th:first-child, .week td:first-child { text-align:left; padding-left:0; }
+.week td.name { font-size:15px; }
+.week td.name small { display:block; font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-faint); }
+.week td.today-col { background:color-mix(in srgb, var(--pine) 7%, transparent); }
+.cell { width:32px; height:32px; border-radius:6px; border:1.5px solid var(--rule); background:transparent;
+  display:inline-grid; place-items:center; padding:0; -webkit-tap-highlight-color:transparent; }
+.cell[aria-pressed="true"] { background:var(--pine); border-color:var(--pine); }
+.cell svg { width:14px; height:14px; opacity:0; }
+.cell[aria-pressed="true"] svg { opacity:1; }
+.cell:disabled { border-style:dashed; opacity:.45; cursor:default; }
+.week td.sum { font-family:"IBM Plex Mono",monospace; font-size:12.5px; white-space:nowrap; color:var(--ink-soft); }
+.week td.sum.ok { color:var(--pine); } .week td.sum.warn { color:var(--gold); }
+
+/* Цикл */
+.cycle-wrap { display:flex; flex-wrap:wrap; gap:18px 36px; align-items:flex-start; }
+.cycle-wrap > div { flex:1 1 280px; max-width:440px; }
+.heat { display:grid; grid-template-columns:22px repeat(var(--weeks,12), minmax(0,1fr)); gap:3px; width:100%; }
+.heat .lbl { font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-faint);
+  display:flex; align-items:center; justify-content:center; }
+.heat .lbl.row { justify-content:flex-start; }
+.heat .lbl.now { color:var(--pine); font-weight:500; }
+.hc { aspect-ratio:1; max-width:100%; border-radius:3px; background:var(--s0); }
+.hc.l1 { background:var(--s1); } .hc.l2 { background:var(--s2); } .hc.l3 { background:var(--s3); } .hc.l4 { background:var(--s4); }
+.hc.future { background:transparent; box-shadow:inset 0 0 0 1px var(--rule-soft); }
+.hc.is-today { box-shadow:0 0 0 2px var(--paper), 0 0 0 3.5px var(--ink); }
+.legend { display:flex; align-items:center; gap:4px; margin-top:10px; font-family:"IBM Plex Mono",monospace;
+  font-size:11px; color:var(--ink-faint); }
+.legend i { width:12px; height:12px; border-radius:2px; display:inline-block; }
+.cycle-stats { list-style:none; margin:0; padding:0; flex:1 1 260px; }
+.cycle-stats li { display:flex; justify-content:space-between; gap:12px; padding:8px 0;
+  border-bottom:1px solid var(--rule-soft); font-size:15px; }
+.cycle-stats .v { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-soft); white-space:nowrap; }
+.note { margin:10px 0 0; font-size:13.5px; color:var(--ink-faint); max-width:62ch; }
+
+/* Настройка и подключение */
+details.panel { border-top:2px solid var(--ink); padding-top:12px; }
+details.panel > summary { font-family:Archivo,sans-serif; font-size:22px; font-weight:600; letter-spacing:-.015em;
+  cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+details.panel > summary::-webkit-details-marker { display:none; }
+details.panel > summary .aside { font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:400; color:var(--ink-faint); }
+details.panel[open] > summary .aside .closed, details.panel:not([open]) > summary .aside .opened { display:none; }
+form.row { display:flex; flex-wrap:wrap; gap:8px; margin-block:16px 18px; }
+form.row input[type=text] { flex:1 1 220px; }
+.field { border:1px solid var(--rule); background:var(--surface); border-radius:3px; padding:7px 10px; font-size:15px; min-width:0; }
+.btn { border:1px solid var(--ink); background:var(--ink); color:var(--paper); border-radius:3px; padding:7px 14px;
+  font-family:Archivo,sans-serif; font-weight:600; font-size:14px; }
+.btn.ghost { background:transparent; color:var(--ink); border-color:var(--rule); font-weight:500; }
+.btn.danger { background:transparent; color:var(--gold); border-color:var(--gold); }
+.btn:disabled { opacity:.45; cursor:default; }
+ul.mlist { list-style:none; margin:0; padding:0; }
+ul.mlist li { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--rule-soft); }
+ul.mlist .field.name { flex:1 1 200px; }
+ul.mlist .arch-name { flex:1 1 200px; color:var(--ink-faint); }
+.mhead { font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-faint); margin:22px 0 4px; }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+.connect { display:grid; gap:14px; margin-top:14px; max-width:620px; }
+.connect ol { margin:0; padding-left:20px; font-size:15px; color:var(--ink-soft); display:grid; gap:4px; }
+.connect label { display:grid; gap:4px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--ink-faint); }
+.connect .field { font-family:"IBM Plex Mono",monospace; font-size:14px; text-transform:none; letter-spacing:0; }
+.connect .actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.connect .state { font-size:14px; color:var(--ink-soft); }
+
+footer { margin-top:48px; padding-top:14px; border-top:1px solid var(--rule); font-family:"IBM Plex Mono",monospace;
+  font-size:11.5px; color:var(--ink-faint); line-height:1.7; }
+
+.tip { position:fixed; z-index:10; pointer-events:none; background:var(--tip-bg); color:var(--tip-ink);
+  font-family:"IBM Plex Mono",monospace; font-size:12px; padding:5px 9px; border-radius:3px; white-space:nowrap; }
+
+@media (max-width:520px) {
+  .hab { grid-template-columns:28px 1fr; }
+  .hab .dots { grid-column:2; }
+}
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="top-row">
+      <span class="eyebrow" id="cycle-line">Привычки</span>
+      <button type="button" class="sync" id="sync" title="Обновить с GitHub">не подключено</button>
+    </div>
+    <h1 id="today-title">Сегодня</h1>
+    <p class="lede" id="today-sum"></p>
+  </header>
+  <div class="notice" id="notice" role="status" hidden></div>
+
+  <div id="main" hidden>
+    <section>
+      <div class="sec-head"><h2>Привычки на сегодня</h2><span class="aside">нажми, чтобы отметить</span></div>
+      <ul class="today" id="today-list"></ul>
+    </section>
+
+    <section>
+      <div class="sec-head">
+        <h2>Неделя</h2>
+        <div class="nav">
+          <button type="button" id="prev" aria-label="Предыдущая неделя">←</button>
+          <span id="week-label"></span>
+          <button type="button" id="next" aria-label="Следующая неделя">→</button>
+          <button type="button" id="now">Эта</button>
+        </div>
+      </div>
+      <div class="scroll"><table class="week" id="week-table"></table></div>
+      <p class="note">Прошлые дни можно отметить задним числом. Норма считается на неделю, а не на каждый день.</p>
+    </section>
+
+    <section id="cycle" hidden>
+      <div class="sec-head"><h2 id="cycle-title">Цикл</h2><span class="aside">доля привычек, отмеченных за день</span></div>
+      <div class="cycle-wrap">
+        <div>
+          <div class="heat" id="heat" aria-label="Тепловая карта цикла"></div>
+          <div class="legend" aria-hidden="true">меньше
+            <i style="background:var(--s0)"></i><i style="background:var(--s1)"></i><i style="background:var(--s2)"></i><i style="background:var(--s3)"></i><i style="background:var(--s4)"></i>
+            все</div>
+        </div>
+        <ul class="cycle-stats" id="cycle-stats" aria-label="Недель с нормой за цикл"></ul>
+      </div>
+    </section>
+
+    <section>
+      <details class="panel" id="manage">
+        <summary>Настроить привычки <span class="aside"><span class="closed">открыть</span><span class="opened">свернуть</span></span></summary>
+        <form class="row" id="add-form">
+          <label class="sr" for="add-name">Новая привычка</label>
+          <input class="field" type="text" id="add-name" placeholder="Новая привычка" maxlength="60" autocomplete="off">
+          <label class="sr" for="add-sphere">Сфера</label>
+          <select class="field" id="add-sphere"></select>
+          <label class="sr" for="add-target">Норма в неделю</label>
+          <select class="field" id="add-target"></select>
+          <button class="btn" type="submit" id="add-btn">Добавить</button>
+        </form>
+        <ul class="mlist" id="mlist"></ul>
+        <div id="archive-wrap" hidden>
+          <p class="mhead">Архив</p>
+          <ul class="mlist" id="alist"></ul>
+        </div>
+        <p class="note">Лучше держать 4–6 привычек. Архив прячет привычку, но сохраняет её отметки.</p>
+      </details>
+    </section>
+  </div>
+
+  <section>
+    <details class="panel" id="connect-panel">
+      <summary>Подключение <span class="aside"><span class="closed">открыть</span><span class="opened">свернуть</span></span></summary>
+      <form class="connect" id="connect-form" autocomplete="off">
+        <p class="state" id="connect-state"></p>
+        <ol>
+          <li>Создай токен на <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>.</li>
+          <li>Repository access → Only select repositories → репозиторий с данными.</li>
+          <li>Repository permissions → Contents → Read and write.</li>
+          <li>Вставь токен ниже. Он хранится только в этом браузере.</li>
+        </ol>
+        <label for="cf-repo">Репозиторий с данными
+          <input class="field" id="cf-repo" type="text" placeholder="владелец/репозиторий" spellcheck="false" autocapitalize="off">
+        </label>
+        <label for="cf-token">Токен
+          <input class="field" id="cf-token" type="password" placeholder="github_pat_…" spellcheck="false" autocapitalize="off">
+        </label>
+        <div class="actions">
+          <button class="btn" type="submit" id="cf-save">Подключить</button>
+          <button class="btn ghost" type="button" id="cf-forget" hidden>Отключить это устройство</button>
+          <span id="cf-confirm" hidden>
+            <span class="hab-meta warn-t" id="cf-confirm-text"></span>
+            <button class="btn danger" type="button" id="cf-forget-yes">Отключить</button>
+            <button class="btn ghost" type="button" id="cf-forget-no">Отмена</button>
+          </span>
+        </div>
+      </form>
+    </details>
+  </section>
+
+  <footer id="footer">Отметки хранятся в data.json приватного репозитория. Каждое сохранение — коммит.</footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+(() => {
+"use strict";
+const DOW = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+const CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="var(--pine-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const LS = { cfg: "habits.cfg", base: "habits.base", pending: "habits.pending" };
+const DEFAULT_SETTINGS = { cycleStart: null, cycleWeeks: 12, busyDays: [], busyLabel: "", spheres: ["работа","семья","здоровье","дом","деньги"] };
+
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, "0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parse = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const monday = d => addDays(d, -((d.getDay() + 6) % 7));
+const todayDate = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtLong = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+const fmtDay = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
+const fmtShort = new Intl.DateTimeFormat("ru-RU", { weekday: "short", day: "numeric", month: "short" });
+const fmtDM = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" });
+const fmtTime = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
+function plural(n, one, few, many) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b === 1) return one;
+  if (b >= 2 && b <= 4) return few;
+  return many;
+}
+function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+const clone = o => JSON.parse(JSON.stringify(o));
+
+/* ---------- состояние ----------
+   base    — последняя версия data.json с GitHub и её sha
+   pending — изменения, ещё не отправленные коммитом; накладываются поверх base */
+const S = {
+  cfg: lsGet(LS.cfg), base: lsGet(LS.base), pending: lsGet(LS.pending) || [],
+  data: null, sync: "idle", savedAt: null, saving: false, again: false,
+  weekOffset: 0, confirmDelete: null,
+};
+
+function applyOp(d, op) {
+  if (op.t === "check") {
+    const day = d.log[op.date] || (d.log[op.date] = {});
+    if (op.val) day[op.hid] = true; else delete day[op.hid];
+    if (!Object.keys(day).length) delete d.log[op.date];
+  } else if (op.t === "habit") {
+    const h = d.habits.find(x => x.id === op.id);
+    if (h) Object.assign(h, op.data); else d.habits.push({ id: op.id, ...op.data });
+  } else if (op.t === "del") {
+    d.habits = d.habits.filter(x => x.id !== op.id);
+  }
+  return d;
+}
+function normalize(d) {
+  d = d && typeof d === "object" ? d : {};
+  return { version: 1, ...d, settings: { ...DEFAULT_SETTINGS, ...(d.settings || {}) },
+    habits: Array.isArray(d.habits) ? d.habits : [], log: d.log && typeof d.log === "object" ? d.log : {} };
+}
+function recompute() {
+  if (!S.base) { S.data = null; return; }
+  const d = normalize(clone(S.base.data));
+  for (const op of S.pending) applyOp(d, op);
+  S.data = d;
+}
+function persist() { lsSet(LS.base, S.base); lsSet(LS.pending, S.pending.length ? S.pending : null); }
+
+const settings = () => S.data ? S.data.settings : DEFAULT_SETTINGS;
+const habits = () => S.data ? S.data.habits : [];
+const active = () => habits().filter(h => !h.archived).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+const archived = () => habits().filter(h => h.archived).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+const existed = (h, date) => !h.created || h.created <= date;
+const isDone = (date, hid) => S.data?.log[date]?.[hid] === true;
+const canWrite = () => !!(S.cfg && S.data);
+
+/* ---------- GitHub ---------- */
+function b64dec(b64) {
+  const bin = atob(b64.replace(/\s/g, ""));
+  return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+}
+function b64enc(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+async function gh(method, body) {
+  const res = await fetch(`https://api.github.com/repos/${S.cfg.repo}/contents/data.json`, {
+    method, cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${S.cfg.token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(json.message || res.statusText); e.status = res.status; throw e; }
+  return json;
+}
+async function pull() {
+  const j = await gh("GET");
+  let data;
+  try { data = JSON.parse(b64dec(j.content)); }
+  catch { const e = new Error("bad json"); e.status = "json"; throw e; }
+  return { data, sha: j.sha };
+}
+function commitMsg(ops) {
+  const on = ops.filter(o => o.t === "check" && o.val), off = ops.filter(o => o.t === "check" && !o.val);
+  const days = [...new Set([...on, ...off].map(o => fmtDM.format(parse(o.date))))];
+  const parts = [];
+  if (on.length || off.length) parts.push(`Отметки ${days.join(", ")}: ${[on.length && "+" + on.length, off.length && "−" + off.length].filter(Boolean).join(" ")}`);
+  if (ops.some(o => o.t !== "check")) parts.push("настройка привычек");
+  return parts.join("; ") || "Обновление";
+}
+function errorText(e) {
+  const repo = S.cfg?.repo || "репозиторий";
+  if (e.status === 401) return "GitHub не принял токен. Создай новый и вставь его в «Подключение».";
+  if (e.status === 403) return `Токену не хватает прав. Нужен доступ Contents: Read and write к ${repo}.`;
+  if (e.status === 404) return `Не нашёл ${repo}/data.json. Проверь название репозитория и что токен выдан на него.`;
+  if (e.status === "json") return "data.json в репозитории повреждён: это не JSON. Исправь файл на GitHub.";
+  if (e instanceof TypeError) return "Нет связи с GitHub. Отметки остались на этом устройстве и уйдут, когда связь вернётся.";
+  return `GitHub ответил ошибкой: ${e.message}. Попробуй ещё раз через минуту.`;
+}
+function setSync(state, err) {
+  S.sync = state;
+  if (state === "saved") S.savedAt = new Date();
+  notice(err ? errorText(err) : "");
+  if (err && (err.status === 401 || err.status === 404 || err.status === 403)) $("#connect-panel").open = true;
+  renderSync();
+}
+async function refresh() {
+  if (!S.cfg || S.saving) return;
+  setSync("loading");
+  try {
+    S.base = await pull(); persist(); recompute();
+    setSync(S.pending.length ? "pending" : "saved");
+    if (S.pending.length) schedule(0);
+  } catch (e) { setSync(e instanceof TypeError ? "offline" : "error", e); }
+  render();
+}
+let timer = null;
+function schedule(ms = 1200) { clearTimeout(timer); timer = setTimeout(flush, ms); }
+async function flush() {
+  if (!S.cfg || !S.pending.length) return;
+  if (S.saving) { S.again = true; return; }
+  S.saving = true; setSync("saving");
+  let done = false;
+  try {
+    if (!S.base) S.base = await pull();
+    for (let attempt = 0; attempt < 4 && !done; attempt++) {
+      const ops = S.pending.slice();
+      const next = normalize(clone(S.base.data));
+      ops.forEach(op => applyOp(next, op));
+      try {
+        const r = await gh("PUT", { message: commitMsg(ops), content: b64enc(JSON.stringify(next, null, 2) + "\n"), sha: S.base.sha });
+        S.base = { data: next, sha: r.content.sha };
+        S.pending = S.pending.slice(ops.length);
+        done = true;
+      } catch (e) {
+        if (e.status === 409 || (e.status === 422 && /sha/i.test(e.message))) { S.base = await pull(); continue; }
+        throw e;
+      }
+    }
+    persist(); recompute();
+    if (done) setSync(S.pending.length ? "pending" : "saved");
+    else setSync("error", new Error("файл всё время меняется с другого устройства"));
+  } catch (e) {
+    persist(); setSync(e instanceof TypeError ? "offline" : "error", e);
+  }
+  S.saving = false;
+  render();
+  if (S.pending.length && (S.again || done)) schedule(S.again ? 300 : 1200);
+  S.again = false;
+}
+function op(o) {
+  if (!canWrite()) { $("#connect-panel").open = true; return; }
+  S.pending.push(o); persist(); recompute();
+  setSync("pending"); render(); schedule();
+}
+
+/* ---------- расчёты ---------- */
+function weekCount(h, mon) {
+  let n = 0;
+  for (let i = 0; i < 7; i++) if (isDone(ymd(addDays(mon, i)), h.id)) n++;
+  return n;
+}
+function streak(h) {
+  const target = h.target || 1, first = monday(parse(h.created || ymd(todayDate())));
+  let wk = monday(todayDate()), n = 0;
+  if (weekCount(h, wk) >= target) n++;
+  wk = addDays(wk, -7);
+  for (let i = 0; i < 104 && wk >= first; i++, wk = addDays(wk, -7)) {
+    if (weekCount(h, wk) >= target) n++; else break;
+  }
+  return n;
+}
+function weekStatus(h, mon) {
+  const target = h.target || 1, count = weekCount(h, mon), t = todayDate();
+  if (count >= target) return { count, target, cls: "ok", text: "норма недели есть" };
+  const sun = addDays(mon, 6);
+  if (sun < t) return { count, target, cls: "warn", text: `не хватило ${target - count}` };
+  let free = 0;
+  for (let d = new Date(Math.max(t, mon)); d <= sun; d = addDays(d, 1)) if (!isDone(ymd(d), h.id)) free++;
+  const need = target - count;
+  if (need > free) return { count, target, cls: "warn", text: "норму уже не добрать" };
+  return { count, target, cls: "", text: `осталось ${need} ${plural(need, "раз", "раза", "раз")}` };
+}
+function cycleWeek(t) {
+  const st = settings();
+  if (!st.cycleStart) return 0;
+  return Math.floor(Math.round((t - parse(st.cycleStart)) / 864e5) / 7) + 1;
+}
+
+/* ---------- отрисовка ---------- */
+function notice(msg) { const n = $("#notice"); n.textContent = msg || ""; n.hidden = !msg; }
+function renderSync() {
+  const el = $("#sync"), p = S.pending.length;
+  const map = {
+    idle: ["", "не подключено"], loading: ["busy", "загружаю…"], saving: ["busy", "сохраняю…"],
+    pending: ["busy", "сейчас сохраню"],
+    saved: ["ok", S.savedAt ? `сохранено ${fmtTime.format(S.savedAt)}` : "сохранено"],
+    offline: ["warn", p ? `не отправлено: ${p}` : "нет связи"],
+    error: ["warn", p ? `не сохранено: ${p}` : "ошибка"],
+  };
+  const [cls, text] = S.cfg ? map[S.sync] || map.idle : map.idle;
+  el.className = "sync " + cls; el.textContent = text;
+}
+function render() {
+  renderSync(); renderHeader(); renderConnect();
+  $("#main").hidden = !S.data;
+  if (!S.data) return;
+  renderToday(); renderWeek(); renderCycle(); renderManage();
+}
+function renderHeader() {
+  const t = todayDate(), tk = ymd(t), st = settings(), w = cycleWeek(t);
+  $("#today-title").textContent = fmtLong.format(t);
+  $("#cycle-line").textContent = st.cycleStart && w >= 1 && w <= st.cycleWeeks
+    ? `Цикл ${st.cycleWeeks} недель · неделя ${w} из ${st.cycleWeeks}` : "Привычки";
+  const sum = $("#today-sum");
+  if (!S.cfg && !S.data) { sum.textContent = "Подключи репозиторий с данными, чтобы увидеть привычки."; return; }
+  if (!S.data) { sum.textContent = "Загружаю привычки с GitHub…"; return; }
+  const hs = active();
+  if (!hs.length) { sum.textContent = "Привычек пока нет. Добавь первую в настройке ниже."; return; }
+  const doneToday = hs.filter(h => isDone(tk, h.id)).length;
+  const met = hs.filter(h => weekCount(h, monday(t)) >= (h.target || 1)).length;
+  sum.innerHTML = `Сегодня отмечено <b>${doneToday} из ${hs.length}</b> · норма недели выполнена по <b>${met}</b> ${plural(met, "привычке", "привычкам", "привычкам")} из ${hs.length}`;
+}
+function renderToday() {
+  const ul = $("#today-list"), t = todayDate(), tk = ymd(t), mon = monday(t), hs = active();
+  if (!hs.length) { ul.innerHTML = '<li class="empty">Здесь появятся привычки, которые ты добавишь.</li>'; return; }
+  ul.innerHTML = hs.map(h => {
+    const on = isDone(tk, h.id), st = weekStatus(h, mon), sr = streak(h);
+    const dots = Array.from({ length: Math.min(st.target, 7) }, (_, i) => `<i class="${i < st.count ? "on" : ""}"></i>`).join("");
+    const streakTxt = sr > 1 ? ` · серия ${sr} ${plural(sr, "неделя", "недели", "недель")}` : "";
+    return `<li><button type="button" class="hab" aria-pressed="${on}" data-toggle data-date="${tk}" data-hid="${esc(h.id)}">
+      <span class="tick">${CHECK}</span>
+      <span class="hab-main"><span class="hab-name">${esc(h.name)}</span>
+        <span class="hab-meta">${h.sphere ? esc(h.sphere) + " · " : ""}${st.count} из ${st.target} за неделю · <span class="${st.cls}-t">${st.text}</span>${streakTxt}</span></span>
+      <span class="dots" aria-hidden="true">${dots}</span>
+    </button></li>`;
+  }).join("");
+}
+function renderWeek() {
+  const t = todayDate(), tk = ymd(t), st = settings();
+  const busy = new Set(st.busyDays || []);
+  const mon = addDays(monday(t), S.weekOffset * 7), sun = addDays(mon, 6);
+  $("#week-label").textContent = mon.getMonth() === sun.getMonth()
+    ? `${mon.getDate()}–${fmtDay.format(sun)}` : `${fmtDay.format(mon)} – ${fmtDay.format(sun)}`;
+  $("#next").disabled = S.weekOffset >= 0;
+  $("#now").disabled = S.weekOffset === 0;
+  const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
+  const mark = i => busy.has(i) && st.busyLabel ? esc(st.busyLabel) : "&nbsp;";
+  const head = `<thead><tr><th scope="col">Привычка</th>${days.map((d, i) =>
+    `<th scope="col" class="${ymd(d) === tk ? "is-today" : ""}">${DOW[i]} ${d.getDate()}<span class="ch">${mark(i)}</span></th>`).join("")}<th scope="col">Итог</th></tr></thead>`;
+  const hs = active();
+  const body = !hs.length ? `<tr><td colspan="9" class="empty">Привычек пока нет.</td></tr>` : hs.map(h => {
+    const ws = weekStatus(h, mon);
+    const cells = days.map(d => {
+      const k = ymd(d), on = isDone(k, h.id), future = d > t;
+      return `<td class="${k === tk ? "today-col" : ""}"><button type="button" class="cell" aria-pressed="${on}" ${future ? "disabled" : ""}
+        data-toggle data-date="${k}" data-hid="${esc(h.id)}" aria-label="${esc(h.name)}, ${fmtShort.format(d)}" title="${fmtShort.format(d)}">${CHECK}</button></td>`;
+    }).join("");
+    return `<tr><td class="name">${esc(h.name)}<small>норма ${ws.target} в нед.</small></td>${cells}<td class="sum ${ws.cls}">${ws.count}/${ws.target}</td></tr>`;
+  }).join("");
+  $("#week-table").innerHTML = head + `<tbody>${body}</tbody>`;
+}
+function renderCycle() {
+  const st = settings(), sec = $("#cycle");
+  sec.hidden = !st.cycleStart;
+  if (!st.cycleStart) return;
+  const weeks = st.cycleWeeks || 12, t = todayDate(), tk = ymd(t), start = parse(st.cycleStart), cw = cycleWeek(t);
+  const end = addDays(start, weeks * 7 - 1);
+  $("#cycle-title").textContent = `Цикл · ${fmtDM.format(start)} — ${fmtDM.format(end)}`;
+  const heat = $("#heat");
+  heat.style.setProperty("--weeks", weeks);
+  const hs = habits().filter(h => !h.archived);
+  let html = `<span class="lbl"></span>`;
+  for (let w = 1; w <= weeks; w++) html += `<span class="lbl ${w === cw ? "now" : ""}">${w}</span>`;
+  for (let d = 0; d < 7; d++) {
+    html += `<span class="lbl row">${DOW[d]}</span>`;
+    for (let w = 0; w < weeks; w++) {
+      const day = addDays(start, w * 7 + d), k = ymd(day);
+      if (day > t) { html += `<span class="hc future" data-tip="${fmtShort.format(day)} · впереди"></span>`; continue; }
+      const pool = hs.filter(h => existed(h, k));
+      const n = pool.filter(h => isDone(k, h.id)).length;
+      const r = pool.length ? n / pool.length : 0;
+      const lvl = r === 0 ? 0 : r >= 1 ? 4 : r > .66 ? 3 : r > .33 ? 2 : 1;
+      html += `<span class="hc l${lvl} ${k === tk ? "is-today" : ""}" tabindex="0" data-tip="${fmtShort.format(day)} · ${n} из ${pool.length}" aria-label="${fmtShort.format(day)}: ${n} из ${pool.length}"></span>`;
+    }
+  }
+  heat.innerHTML = html;
+  const lastFull = Math.min(Math.max(cw - 1, 0), weeks);
+  $("#cycle-stats").innerHTML = active().map(h => {
+    let met = 0, total = 0;
+    for (let w = 0; w < lastFull; w++) {
+      const mon = addDays(start, w * 7);
+      if (ymd(addDays(mon, 6)) < (h.created || st.cycleStart)) continue;
+      total++;
+      if (weekCount(h, mon) >= (h.target || 1)) met++;
+    }
+    return `<li><span>${esc(h.name)}</span><span class="v">${total ? `${met} из ${total} нед. с нормой` : "первая неделя"}</span></li>`;
+  }).join("");
+}
+function sphereOptions(sel) {
+  const sp = settings().spheres || [];
+  const list = !sel || sp.includes(sel) ? sp : [sel, ...sp];
+  return `<option value="" ${sel ? "" : "selected"}>без сферы</option>` +
+    list.map(s => `<option value="${esc(s)}" ${s === sel ? "selected" : ""}>${esc(s)}</option>`).join("");
+}
+function targetOptions(sel) {
+  return [1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === sel ? "selected" : ""}>${n} в нед.</option>`).join("");
+}
+let addFormReady = false;
+function renderManage() {
+  if (!addFormReady) { $("#add-sphere").innerHTML = sphereOptions(""); $("#add-target").innerHTML = targetOptions(3); addFormReady = true; }
+  if (document.activeElement?.closest?.("#mlist")) return;
+  const can = canWrite(), hs = active();
+  $("#add-btn").disabled = !can;
+  $("#mlist").innerHTML = hs.length ? hs.map((h, i) => `<li data-hid="${esc(h.id)}">
+      <label class="sr" for="n-${esc(h.id)}">Название</label>
+      <input class="field name" id="n-${esc(h.id)}" type="text" value="${esc(h.name)}" maxlength="60" data-act="rename" ${can ? "" : "disabled"}>
+      <label class="sr" for="s-${esc(h.id)}">Сфера</label>
+      <select class="field" id="s-${esc(h.id)}" data-act="sphere" ${can ? "" : "disabled"}>${sphereOptions(h.sphere)}</select>
+      <label class="sr" for="t-${esc(h.id)}">Норма</label>
+      <select class="field" id="t-${esc(h.id)}" data-act="target" ${can ? "" : "disabled"}>${targetOptions(h.target || 1)}</select>
+      <button type="button" class="btn ghost" data-act="up" aria-label="Выше" ${can && i > 0 ? "" : "disabled"}>↑</button>
+      <button type="button" class="btn ghost" data-act="down" aria-label="Ниже" ${can && i < hs.length - 1 ? "" : "disabled"}>↓</button>
+      <button type="button" class="btn ghost" data-act="archive" ${can ? "" : "disabled"}>В архив</button>
+    </li>`).join("") : '<li class="empty">Добавь первую привычку формой выше.</li>';
+  const ar = archived();
+  $("#archive-wrap").hidden = !ar.length;
+  $("#alist").innerHTML = ar.map(h => `<li data-hid="${esc(h.id)}"><span class="arch-name">${esc(h.name)}</span>
+    ${S.confirmDelete === h.id
+      ? `<span class="hab-meta">Удалить вместе с отметками?</span>
+         <button type="button" class="btn danger" data-act="delete-yes" ${can ? "" : "disabled"}>Удалить</button>
+         <button type="button" class="btn ghost" data-act="delete-no">Отмена</button>`
+      : `<button type="button" class="btn ghost" data-act="restore" ${can ? "" : "disabled"}>Вернуть</button>
+         <button type="button" class="btn ghost" data-act="delete" ${can ? "" : "disabled"}>Удалить</button>`}
+  </li>`).join("");
+}
+function renderConnect() {
+  const connected = !!S.cfg;
+  $("#connect-state").textContent = connected
+    ? `Подключено к ${S.cfg.repo}. Чтобы сменить токен, вставь новый и нажми «Подключить».`
+    : "Устройство не подключено. Нужен репозиторий с data.json и токен GitHub.";
+  $("#cf-forget").hidden = !connected || !$("#cf-confirm").hidden;
+  const repo = $("#cf-repo");
+  if (!repo.value && document.activeElement !== repo) {
+    repo.value = S.cfg?.repo || (location.hostname.endsWith(".github.io") ? location.hostname.split(".")[0] + "/habits-data" : "");
+  }
+  $("#cf-save").textContent = connected ? "Сохранить" : "Подключить";
+}
+
+/* ---------- действия ---------- */
+document.addEventListener("click", e => {
+  const tg = e.target.closest("[data-toggle]");
+  if (tg && !tg.disabled) {
+    op({ t: "check", date: tg.dataset.date, hid: tg.dataset.hid, val: !isDone(tg.dataset.date, tg.dataset.hid) });
+    return;
+  }
+  const act = e.target.closest("button[data-act]");
+  if (!act || act.disabled) return;
+  const hid = act.closest("li")?.dataset.hid, a = act.dataset.act;
+  if (a === "archive") op({ t: "habit", id: hid, data: { archived: true } });
+  else if (a === "restore") op({ t: "habit", id: hid, data: { archived: false, order: Math.max(-1, ...active().map(h => h.order ?? 0)) + 1 } });
+  else if (a === "delete") { S.confirmDelete = hid; renderManage(); }
+  else if (a === "delete-no") { S.confirmDelete = null; renderManage(); }
+  else if (a === "delete-yes") { S.confirmDelete = null; op({ t: "del", id: hid }); }
+  else if (a === "up" || a === "down") {
+    const hs = active(), i = hs.findIndex(h => h.id === hid), j = i + (a === "up" ? -1 : 1);
+    if (i < 0 || j < 0 || j >= hs.length) return;
+    [hs[i], hs[j]] = [hs[j], hs[i]];
+    hs.forEach((h, n) => { if (h.order !== n) S.pending.push({ t: "habit", id: h.id, data: { order: n } }); });
+    persist(); recompute(); setSync("pending"); render(); schedule();
+  }
+});
+$("#mlist").addEventListener("change", e => {
+  const el = e.target, hid = el.closest("li")?.dataset.hid, a = el.dataset.act;
+  if (!hid) return;
+  if (a === "rename") {
+    const v = el.value.trim();
+    if (v) op({ t: "habit", id: hid, data: { name: v } });
+    else el.value = habits().find(h => h.id === hid)?.name || "";
+  }
+  else if (a === "sphere") op({ t: "habit", id: hid, data: { sphere: el.value } });
+  else if (a === "target") op({ t: "habit", id: hid, data: { target: Number(el.value) } });
+});
+$("#mlist").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.act === "rename") e.target.blur(); });
+$("#mlist").addEventListener("focusout", () => setTimeout(() => { if (!document.activeElement?.closest?.("#mlist")) renderManage(); }, 0));
+$("#add-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = $("#add-name").value.trim();
+  if (!name || !canWrite()) return;
+  const id = "h" + Date.now().toString(36);
+  op({ t: "habit", id, data: { name, sphere: $("#add-sphere").value, target: Number($("#add-target").value),
+    order: Math.max(-1, ...active().map(h => h.order ?? 0)) + 1, archived: false, created: ymd(todayDate()) } });
+  $("#add-name").value = "";
+});
+$("#prev").addEventListener("click", () => { S.weekOffset--; renderWeek(); });
+$("#next").addEventListener("click", () => { if (S.weekOffset < 0) { S.weekOffset++; renderWeek(); } });
+$("#now").addEventListener("click", () => { S.weekOffset = 0; renderWeek(); });
+$("#sync").addEventListener("click", () => { if (!S.cfg) { $("#connect-panel").open = true; return; } S.pending.length ? flush() : refresh(); });
+
+$("#connect-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const repo = $("#cf-repo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
+  const token = $("#cf-token").value.trim() || S.cfg?.token || "";
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { notice("Укажи репозиторий в виде владелец/репозиторий, например 1337David1337/habits-data."); return; }
+  if (!token) { notice("Вставь токен GitHub."); return; }
+  if (S.cfg && S.cfg.repo !== repo) { S.base = null; S.pending = []; persist(); recompute(); }
+  S.cfg = { repo, token }; lsSet(LS.cfg, S.cfg);
+  $("#cf-token").value = "";
+  $("#connect-panel").open = false;
+  refresh();
+});
+$("#cf-forget").addEventListener("click", () => {
+  const p = S.pending.length;
+  $("#cf-confirm-text").textContent = p ? `${p} ${plural(p, "изменение", "изменения", "изменений")} ещё не сохранено и пропадёт.` : "Токен и данные будут стёрты с этого устройства.";
+  $("#cf-confirm").hidden = false; $("#cf-forget").hidden = true;
+});
+$("#cf-forget-no").addEventListener("click", () => { $("#cf-confirm").hidden = true; renderConnect(); });
+$("#cf-forget-yes").addEventListener("click", () => {
+  S.cfg = null; S.base = null; S.pending = [];
+  lsSet(LS.cfg, null); persist(); recompute();
+  $("#cf-confirm").hidden = true; $("#cf-repo").value = "";
+  setSync("idle"); render();
+});
+
+/* ---------- подсказка на тепловой карте ---------- */
+const tip = $("#tip");
+function showTip(el) {
+  if (!el?.dataset.tip) { tip.hidden = true; return; }
+  tip.textContent = el.dataset.tip; tip.hidden = false;
+  const r = el.getBoundingClientRect(), w = tip.offsetWidth;
+  tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
+  tip.style.top = Math.max(8, r.top - tip.offsetHeight - 6) + "px";
+}
+$("#heat").addEventListener("pointerover", e => showTip(e.target.closest(".hc")));
+$("#heat").addEventListener("pointerleave", () => { tip.hidden = true; });
+$("#heat").addEventListener("focusin", e => showTip(e.target.closest(".hc")));
+$("#heat").addEventListener("focusout", () => { tip.hidden = true; });
+addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
+
+/* ---------- жизненный цикл ---------- */
+let lastDay = ymd(todayDate());
+setInterval(() => { const d = ymd(todayDate()); if (d !== lastDay) { lastDay = d; render(); } }, 60000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && S.cfg) S.pending.length ? flush() : refresh();
+});
+addEventListener("online", () => { if (S.cfg) S.pending.length ? flush() : refresh(); });
+
+recompute();
+if (!S.cfg) $("#connect-panel").open = true;
+if (S.cfg && S.pending.length) setSync("pending");
+render();
+if (S.cfg) S.pending.length ? flush() : refresh();
+})();
+</script>
+</body>
+</html>
