@@ -176,6 +176,13 @@ footer { margin-top:48px; padding-top:14px; border-top:1px solid var(--rule); fo
 @media (max-width:520px) {
   .hab { grid-template-columns:28px 1fr; }
   .hab .dots { grid-column:2; }
+  table.week { min-width:0; }
+  .week th, .week td { padding:5px 1px; }
+  .week th { font-size:10.5px; }
+  .week th .ch { font-size:8.5px; letter-spacing:0; }
+  .week td.name { font-size:13.5px; line-height:1.3; padding-right:4px; }
+  .cell { width:28px; height:28px; border-radius:5px; }
+  .week td.sum { font-size:11.5px; }
 }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
 </style>
@@ -482,6 +489,8 @@ function streak(h) {
 function weekStatus(h, mon) {
   const target = h.target || 1, count = weekCount(h, mon), t = todayDate();
   if (count >= target) return { count, target, cls: "ok", text: "норма недели есть" };
+  if (h.created && h.created > ymd(mon) && h.created <= ymd(addDays(mon, 6)))
+    return { count, target, cls: "", text: "первая неделя, норма со следующей" };
   const sun = addDays(mon, 6);
   if (sun < t) return { count, target, cls: "warn", text: `не хватило ${target - count}` };
   let free = 0;
