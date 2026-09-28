@@ -273,13 +273,13 @@
           <li>Открой <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com</a> — создастся новый проект.</li>
           <li>Сотри всё в редакторе и вставь код из <a href="https://github.com/1337David1337/habits/blob/main/google-tasks.gs" target="_blank" rel="noopener">google-tasks.gs</a>. Сохрани.</li>
           <li>Слева «Сервисы» → «+» → Google Tasks API → «Добавить».</li>
-          <li>Сверху выбери функцию <code>setup</code> → «Выполнить» → разреши доступ. В журнале появится ключ.</li>
+          <li>Сверху выбери функцию <code>setup</code> → «Выполнить» → разреши доступ. Внизу откроется «Журнал выполнения» со строкой «Ключ для дашборда: …». Скопируй оттуда только ключ — 40 букв и цифр. Это не «Идентификатор развёртывания».</li>
           <li>«Начать развёртывание» → «Новое развёртывание» → тип «Веб-приложение», запуск от твоего имени, доступ «Все». Скопируй URL.</li>
-          <li>Вставь URL и ключ ниже.</li>
+          <li>Вставь URL веб-приложения и ключ из журнала ниже.</li>
         </ol>
         <form class="fgrid" id="gt-form" autocomplete="off">
           <label for="gt-url" class="wide">URL веб-приложения <input class="field" type="url" id="gt-url" placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false"></label>
-          <label for="gt-key">Ключ <input class="field" type="password" id="gt-key" spellcheck="false"></label>
+          <label for="gt-key">Ключ из журнала setup <input class="field" type="password" id="gt-key" spellcheck="false" placeholder="40 символов"></label>
           <button class="btn" type="submit">Сохранить</button>
         </form>
       </details>
@@ -320,6 +320,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

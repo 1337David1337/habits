@@ -962,7 +962,10 @@ async function loadTasks(force) {
 }
 function tasksError() {
   if (!T.error) return "";
-  return T.error.code === "forbidden" ? "Google Задачи: ключ не подошёл. Проверь его в «Настройках дашборда»."
+  const k = settings().tasksKey || "";
+  if (T.error.code === "forbidden" && /^AKfycb/.test(k))
+    return "Google Задачи: в поле ключа сохранён идентификатор развёртывания. Нужен ключ из журнала функции setup — см. шаг 4.";
+  return T.error.code === "forbidden" ? "Google Задачи: ключ не подошёл. Запусти setup ещё раз и скопируй ключ из журнала выполнения."
     : "Не удалось получить Google Задачи. Проверь адрес веб-приложения и что у развёртывания доступ «Все».";
 }
 async function taskSet(task, done) {
@@ -1524,6 +1527,10 @@ $("#gt-form").addEventListener("submit", e => {
   const url = $("#gt-url").value.trim(), key = $("#gt-key").value.trim() || settings().tasksKey;
   if (url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) { notice("Нужен адрес вида https://script.google.com/macros/s/…/exec"); return; }
   if (url && !key) { notice("Вставь ключ из журнала функции setup."); return; }
+  if (url && (/^AKfycb/.test(key) || url.includes(key))) {
+    notice("Это идентификатор развёртывания, а не ключ. Запусти функцию setup в редакторе скрипта и скопируй ключ из строки «Ключ для дашборда: …» в журнале выполнения.");
+    return;
+  }
   $("#gt-key").value = "";
   T.data = null; lsSet(LS.tasks, null); T.error = null;
   if (setSetting({ tasksUrl: url, tasksKey: url ? key : "" })) loadTasks(true);
