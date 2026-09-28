@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Стиль дашборда</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Onest:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+* { box-sizing:border-box; }
+body { margin:0; background:#DADDD8; color:#15201D; font-family:"IBM Plex Sans",system-ui,sans-serif; }
+button { font:inherit; color:inherit; cursor:pointer; }
+.pick { position:sticky; top:0; z-index:30; background:#DADDD8; padding:14px 16px 12px; display:flex; flex-wrap:wrap;
+  gap:10px 18px; align-items:center; justify-content:space-between; border-bottom:1px solid #C5CAC3; }
+.pick h1 { margin:0; font:600 18px/1.2 "IBM Plex Sans",sans-serif; }
+.pick p { margin:2px 0 0; font-size:13px; color:#55605B; }
+.seg { display:inline-flex; background:#C9CEC7; border-radius:8px; padding:3px; gap:2px; }
+.seg button { border:0; background:none; padding:6px 12px; border-radius:6px; font-size:14px; font-weight:500; color:#3A4541; }
+.seg button[aria-selected="true"] { background:#fff; color:#111; box-shadow:0 1px 2px rgba(0,0,0,.12); }
+.row { display:flex; gap:28px; justify-content:center; align-items:flex-start; padding:24px 16px 40px; }
+.col { width:390px; flex:none; }
+.col > .cap { font:600 13px/1.3 "IBM Plex Mono",monospace; letter-spacing:.08em; text-transform:uppercase; color:#4A5550; margin:0 0 10px 4px; }
+.col > .cap span { display:block; font:400 13px/1.4 "IBM Plex Sans",sans-serif; letter-spacing:0; text-transform:none; color:#5F6A65; margin-top:3px; }
+.phone { border-radius:28px; overflow:clip; box-shadow:0 20px 50px rgba(20,30,25,.18), 0 0 0 1px rgba(0,0,0,.08); position:relative; }
+@media (max-width:1259px) {
+  .row { padding:0; }
+  .col { width:100%; }
+  .col:not(.on) { display:none; }
+  .col > .cap { margin:14px 16px 10px; }
+  .phone { border-radius:0; box-shadow:none; }
+}
+@media (min-width:1260px) { .seg { display:none; } }
+
+/* ===== Общая разметка экрана ===== */
+.scr { padding:22px 18px 18px; display:flex; flex-direction:column; gap:22px; }
+.h-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.sync::before { content:""; display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; vertical-align:1px; }
+.acts { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.act { display:grid; grid-template-columns:26px 1fr; gap:9px; align-items:center; text-align:left; }
+.act svg { width:24px; height:24px; }
+.act b { display:block; font-size:14.5px; line-height:1.2; }
+.act span { display:block; font-size:12px; margin-top:2px; }
+.tl { list-style:none; margin:0; padding:0; }
+.tl li { display:grid; grid-template-columns:78px 1fr; gap:12px; position:relative; }
+.tl time { font-variant-numeric:tabular-nums; }
+.tl b { display:block; }
+.tl span { display:block; }
+.strip { display:none; }
+.habs, .tasks { list-style:none; margin:0; padding:0; }
+.hb { display:grid; grid-template-columns:26px 1fr auto; gap:10px; align-items:center; }
+.ck { width:22px; height:22px; border-radius:50%; display:grid; place-items:center; }
+.ck svg { width:12px; height:12px; }
+.dots { display:flex; gap:3px; }
+.dots i { width:7px; height:7px; border-radius:50%; }
+.tk { display:grid; grid-template-columns:22px 1fr; gap:10px; align-items:start; }
+.tk .ck { width:18px; height:18px; margin-top:2px; }
+.tabs { position:sticky; bottom:0; display:grid; grid-template-columns:repeat(4,1fr); padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px)); z-index:5; }
+.tabs a { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:11px; text-decoration:none; padding:4px 0; }
+.tabs svg { width:22px; height:22px; }
+
+/* ===== A. Бумага ===== */
+.v-paper { --paper:#F1F3EF; --surface:#FAFBF8; --ink:#15201D; --soft:#4C5A55; --faint:#6F7B76; --rule:#D5DBD2; --rule2:#E3E7DF;
+  --pine:#1F6B5A; --gold:#7F600F; --wake:#B35E14; --k:#3A5E80;
+  background:var(--paper); color:var(--ink); font-family:"Source Serif 4",Georgia,serif; }
+.v-paper h1, .v-paper h2, .v-paper b { font-family:Archivo,sans-serif; }
+.v-paper .eyebrow { font:500 10.5px "IBM Plex Mono",monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
+.v-paper .sync { font:11px "IBM Plex Mono",monospace; color:var(--faint); border:1px solid var(--rule); border-radius:20px; padding:2px 9px; }
+.v-paper .sync::before { background:var(--pine); }
+.v-paper h1 { font-size:30px; font-weight:700; letter-spacing:-.025em; margin:10px 0 6px; }
+.v-paper .lede { margin:0; font-size:15px; color:var(--soft); }
+.v-paper h2 { font-size:18px; font-weight:600; border-top:2px solid var(--ink); padding-top:9px; margin:0 0 10px; display:flex; justify-content:space-between; align-items:baseline; }
+.v-paper h2 small { font:400 13px "Source Serif 4",Georgia,serif; color:var(--faint); }
+.v-paper .act { background:var(--surface); border:1px solid var(--rule); border-radius:4px; padding:10px 11px; }
+.v-paper .act span { color:var(--faint); }
+.v-paper .tl li { padding:9px 0; border-bottom:1px solid var(--rule2); }
+.v-paper .tl time { font:500 12.5px "IBM Plex Mono",monospace; color:var(--soft); padding-top:2px; }
+.v-paper .tl b { font-size:15px; }
+.v-paper .tl span { font-size:13.5px; color:var(--faint); }
+.v-paper .tl .kid time { color:var(--wake); } .v-paper .tl .me time { color:var(--pine); }
+.v-paper .tl .now { border-bottom:0; padding:2px 0; }
+.v-paper .tl .now time { color:var(--gold); }
+.v-paper .tl .now span { border-top:1.5px solid var(--gold); margin-top:9px; font:500 10px "IBM Plex Mono",monospace; color:var(--gold); letter-spacing:.1em; text-transform:uppercase; }
+.v-paper .tl .done b { color:var(--soft); }
+.v-paper .hb, .v-paper .tk { padding:9px 0; border-bottom:1px solid var(--rule2); }
+.v-paper .hb b, .v-paper .tk b { font-size:15px; font-weight:600; }
+.v-paper .hb div > span, .v-paper .tk div > span { display:block; font-size:12.5px; color:var(--faint); }
+.v-paper .ck { border:2px solid var(--rule); }
+.v-paper .on .ck { background:var(--pine); border-color:var(--pine); }
+.v-paper .dots i { border:1.5px solid var(--rule); } .v-paper .dots i.f { background:var(--pine); border-color:var(--pine); }
+.v-paper .grp { font:500 10px "IBM Plex Mono",monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); padding:8px 0 0; }
+.v-paper .grp.w { color:var(--gold); }
+.v-paper .duo { display:flex; align-items:center; gap:14px; background:var(--surface); border:1px solid var(--rule2); border-radius:4px; padding:12px 14px; }
+.v-paper .duo b { font-size:34px; font-weight:700; letter-spacing:-.03em; }
+.v-paper .duo span { font-size:14px; color:var(--soft); flex:1; }
+.v-paper .duo button { border:1px solid var(--ink); background:var(--ink); color:var(--paper); border-radius:3px; padding:6px 10px; font:600 13px Archivo,sans-serif; }
+.v-paper .tabs { background:color-mix(in srgb, var(--paper) 92%, transparent); border-top:1px solid var(--rule); backdrop-filter:blur(8px); }
+.v-paper .tabs a { color:var(--faint); font-family:"IBM Plex Mono",monospace; }
+.v-paper .tabs a.on { color:var(--ink); }
+.v-paper .tabs a.on svg { color:var(--pine); }
+
+/* ===== B. Мягкий мобильный ===== */
+.v-soft { --bg:#EEF1F4; --card:#FFFFFF; --ink:#141A21; --soft:#4B5563; --faint:#7B8491; --line:#E6E9EE;
+  --teal:#0E7C6B; --teal-bg:#E1F3EF; --amber:#B8570F; --amber-bg:#FDEEDF; --blue:#35629A; --blue-bg:#E4ECF7; --rose:#B4435A; --rose-bg:#FBE7EB;
+  background:var(--bg); color:var(--ink); font-family:Onest,system-ui,sans-serif; }
+.v-soft .scr { gap:16px; }
+.v-soft .eyebrow { font-size:13px; font-weight:500; color:var(--faint); }
+.v-soft .sync { font-size:12px; color:var(--teal); background:var(--teal-bg); border-radius:20px; padding:4px 10px; font-weight:500; }
+.v-soft .sync::before { background:var(--teal); }
+.v-soft h1 { font-size:28px; font-weight:700; letter-spacing:-.02em; margin:8px 0 4px; }
+.v-soft .lede { margin:0; font-size:14.5px; color:var(--soft); }
+.v-soft section { background:var(--card); border-radius:22px; padding:16px; box-shadow:0 1px 2px rgba(16,24,40,.04), 0 6px 20px rgba(16,24,40,.05); }
+.v-soft section.acts-s { background:none; box-shadow:none; padding:0; }
+.v-soft h2 { font-size:17px; font-weight:600; margin:0 0 10px; display:flex; justify-content:space-between; }
+.v-soft h2 small { font-size:13px; font-weight:500; color:var(--faint); }
+.v-soft .act { border:0; border-radius:18px; padding:13px 12px; }
+.v-soft .act.kid { background:var(--amber-bg); } .v-soft .act.kid b { color:var(--amber); }
+.v-soft .act.sleep { background:var(--blue-bg); } .v-soft .act.sleep b { color:var(--blue); }
+.v-soft .act.night { background:#EAE8F6; } .v-soft .act.night b { color:#4E4691; }
+.v-soft .act.me { background:var(--teal-bg); } .v-soft .act.me b { color:var(--teal); }
+.v-soft .act b { font-weight:600; font-size:14px; }
+.v-soft .act span { color:var(--soft); }
+.v-soft .tl { position:relative; }
+.v-soft .tl::before { content:""; position:absolute; left:83px; top:8px; bottom:8px; width:2px; background:var(--line); border-radius:2px; }
+.v-soft .tl li { padding:8px 0 8px; grid-template-columns:70px 1fr; gap:26px; }
+.v-soft .tl li::before { content:""; position:absolute; left:78px; top:13px; width:12px; height:12px; border-radius:50%; background:#C8CED6; box-shadow:0 0 0 3px var(--card); }
+.v-soft .tl .kid::before { background:var(--amber); } .v-soft .tl .me::before { background:var(--teal); }
+.v-soft .tl .slot::before { background:var(--blue); } .v-soft .tl .work::before { background:#9AA3AF; }
+.v-soft .tl time { font-size:13px; font-weight:600; color:var(--soft); text-align:right; padding-top:1px; }
+.v-soft .tl b { font-size:15px; font-weight:600; }
+.v-soft .tl span { font-size:13px; color:var(--faint); }
+.v-soft .tl .band > div { background:var(--amber-bg); border-radius:12px; padding:7px 10px; margin:-7px 0 -3px -10px; }
+.v-soft .tl .now { padding:0; }
+.v-soft .tl .now::before { background:var(--rose); width:10px; height:10px; left:79px; top:4px; }
+.v-soft .tl .now time { color:var(--rose); font-size:12px; }
+.v-soft .tl .now span { color:var(--rose); font-size:12px; font-weight:600; padding-top:1px; }
+.v-soft .tl .done b { color:var(--faint); }
+.v-soft .hb, .v-soft .tk { padding:10px 0; border-bottom:1px solid var(--line); }
+.v-soft li:last-child { border-bottom:0; }
+.v-soft .hb b, .v-soft .tk b { font-size:15px; font-weight:500; }
+.v-soft .hb div > span, .v-soft .tk div > span { display:block; font-size:12.5px; color:var(--faint); }
+.v-soft .ck { width:24px; height:24px; background:#F0F2F5; border:0; }
+.v-soft .on .ck { background:var(--teal); }
+.v-soft .dots i { background:#E3E7EC; width:8px; height:8px; } .v-soft .dots i.f { background:var(--teal); }
+.v-soft .grp { font-size:12.5px; font-weight:600; color:var(--faint); padding:8px 0 0; }
+.v-soft .grp.w { color:var(--amber); }
+.v-soft .duo { display:flex; align-items:center; gap:14px; background:var(--rose-bg); }
+.v-soft .duo b { font-size:34px; font-weight:700; color:var(--rose); }
+.v-soft .duo span { font-size:14px; color:var(--soft); flex:1; }
+.v-soft .duo button { border:0; background:var(--rose); color:#fff; border-radius:14px; padding:9px 12px; font-weight:600; font-size:13px; }
+.v-soft .tabs { background:rgba(255,255,255,.86); backdrop-filter:blur(14px); border-top:1px solid var(--line); }
+.v-soft .tabs a { color:var(--faint); font-weight:500; }
+.v-soft .tabs a.on { color:var(--teal); }
+
+/* ===== C. Панель приборов ===== */
+.v-dash { --bg:#0C0F13; --panel:#141920; --line:#232B35; --ink:#E4E9EF; --soft:#A2ADBA; --faint:#6E7A88;
+  --green:#3DDC97; --amber:#F5A524; --cyan:#5CC8FF; --red:#FF6B6B;
+  background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans",sans-serif; }
+.v-dash .scr { gap:12px; padding-top:18px; }
+.v-dash .eyebrow { font:500 11px "IBM Plex Mono",monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); }
+.v-dash .sync { font:11px "IBM Plex Mono",monospace; color:var(--green); }
+.v-dash .sync::before { background:var(--green); box-shadow:0 0 8px var(--green); }
+.v-dash h1 { font:600 24px/1.2 "IBM Plex Sans",sans-serif; margin:8px 0 2px; }
+.v-dash .lede { display:none; }
+.v-dash .kpis { display:grid !important; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+.v-dash .kpis div { background:var(--panel); padding:9px 10px; }
+.v-dash .kpis b { display:block; font:600 22px/1.1 "IBM Plex Mono",monospace; }
+.v-dash .kpis span { font:10px "IBM Plex Mono",monospace; color:var(--faint); text-transform:uppercase; letter-spacing:.08em; }
+.v-dash .kpis .g b { color:var(--green); } .v-dash .kpis .a b { color:var(--amber); }
+.v-dash section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+.v-dash section.acts-s { background:none; border:0; padding:0; }
+.v-dash h2 { font:500 11px "IBM Plex Mono",monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); margin:0 0 10px; display:flex; justify-content:space-between; }
+.v-dash h2 small { font-size:11px; color:var(--soft); letter-spacing:.04em; }
+.v-dash .act { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; }
+.v-dash .act b { font-weight:500; font-size:13.5px; }
+.v-dash .act span { font:11px "IBM Plex Mono",monospace; color:var(--faint); }
+.v-dash .act.kid { box-shadow:inset 3px 0 0 var(--amber); } .v-dash .act.sleep { box-shadow:inset 3px 0 0 var(--cyan); }
+.v-dash .act.night { box-shadow:inset 3px 0 0 #9D8CFF; } .v-dash .act.me { box-shadow:inset 3px 0 0 var(--green); }
+.v-dash .strip { display:block; position:relative; height:46px; margin:4px 0 12px; }
+.v-dash .strip .rail { position:absolute; left:0; right:0; top:14px; height:14px; background:#1B222B; border-radius:3px; }
+.v-dash .strip i { position:absolute; top:14px; height:14px; border-radius:2px; }
+.v-dash .strip .t { position:absolute; top:32px; font:10px "IBM Plex Mono",monospace; color:var(--faint); transform:translateX(-50%); }
+.v-dash .strip .nowl { position:absolute; top:6px; height:30px; width:2px; background:var(--red); box-shadow:0 0 8px var(--red); }
+.v-dash .tl li { padding:7px 0; border-top:1px solid var(--line); grid-template-columns:86px 1fr; }
+.v-dash .tl li:first-child { border-top:0; }
+.v-dash .tl time { font:500 12.5px "IBM Plex Mono",monospace; color:var(--soft); }
+.v-dash .tl .kid time { color:var(--amber); } .v-dash .tl .me time { color:var(--green); } .v-dash .tl .slot time { color:var(--cyan); }
+.v-dash .tl b { font-weight:500; font-size:14px; }
+.v-dash .tl span { font:11.5px "IBM Plex Mono",monospace; color:var(--faint); }
+.v-dash .tl .now time, .v-dash .tl .now span { color:var(--red); }
+.v-dash .tl .now span { font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; padding-top:2px; }
+.v-dash .tl .done b { color:var(--soft); }
+.v-dash .hb, .v-dash .tk { padding:8px 0; border-top:1px solid var(--line); }
+.v-dash li:first-child.hb, .v-dash .tasks li:first-child { border-top:0; }
+.v-dash .hb b, .v-dash .tk b { font-weight:500; font-size:14px; }
+.v-dash .hb div > span, .v-dash .tk div > span { display:block; font:11px "IBM Plex Mono",monospace; color:var(--faint); }
+.v-dash .ck { border:1.5px solid #3A4552; border-radius:4px; }
+.v-dash .on .ck { background:var(--green); border-color:var(--green); }
+.v-dash .on .ck svg path { stroke:#0C0F13; }
+.v-dash .dots i { background:#26303B; border-radius:1px; width:8px; height:8px; } .v-dash .dots i.f { background:var(--green); }
+.v-dash .grp { font:10px "IBM Plex Mono",monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); padding:6px 0 2px; border-top:0 !important; }
+.v-dash .grp.w { color:var(--red); }
+.v-dash .duo { display:flex; align-items:center; gap:12px; }
+.v-dash .duo b { font:600 26px "IBM Plex Mono",monospace; color:var(--amber); }
+.v-dash .duo span { font-size:13px; color:var(--soft); flex:1; }
+.v-dash .duo button { border:1px solid var(--line); background:#1B222B; border-radius:6px; padding:7px 10px; font-size:12.5px; }
+.v-dash .tabs { background:rgba(12,15,19,.92); border-top:1px solid var(--line); backdrop-filter:blur(8px); }
+.v-dash .tabs a { color:var(--faint); font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.04em; }
+.v-dash .tabs a.on { color:var(--green); }
+.kpis { display:none; }
+</style>
+</head>
+<body>
+<div class="pick">
+  <div>
+    <h1>Как будет выглядеть «Сегодня»</h1>
+    <p>Три стиля одного экрана. Данные выдуманные. Внизу — вкладки.</p>
+  </div>
+  <div class="seg" role="tablist" aria-label="Стиль">
+    <button type="button" data-v="paper" aria-selected="true">Бумага</button>
+    <button type="button" data-v="soft" aria-selected="false">Мягкий</button>
+    <button type="button" data-v="dash" aria-selected="false">Панель</button>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col on" data-col="paper"><p class="cap">A · Бумага<span>Как сейчас: засечки, приглушённые цвета, тонкие линии.</span></p><div class="phone v-paper"></div></div>
+  <div class="col" data-col="soft"><p class="cap">B · Мягкий<span>Как приложение на телефоне: карточки, скругления, цветные кнопки.</span></p><div class="phone v-soft"></div></div>
+  <div class="col" data-col="dash"><p class="cap">C · Панель приборов<span>Тёмный, плотный, цифры моноширинным. Полоса дня на 24 часа.</span></p><div class="phone v-dash"></div></div>
+</div>
+
+<template id="screen">
+  <div class="scr">
+    <header>
+      <div class="h-top"><span class="eyebrow">Сентябрь · неделя 40</span><span class="sync">сохранено 18:40</span></div>
+      <h1>Вторник, 30 сентября</h1>
+      <p class="lede">Отмечено 2 из 4 привычек · норма месяца 64%</p>
+    </header>
+    <div class="kpis">
+      <div class="g"><b>2/4</b><span>привычки</span></div>
+      <div><b>64%</b><span>норма мес.</span></div>
+      <div class="a"><b>3</b><span>задачи</span></div>
+    </div>
+    <section class="acts-s">
+      <div class="acts">
+        <button class="act kid"><svg viewBox="0 0 24 24"><circle cx="12" cy="14" r="4.5" fill="#E0892F"/><path d="M12 4v3M5 7.5l2 2M19 7.5l-2 2M2 19h20" stroke="#E0892F" stroke-width="1.8" stroke-linecap="round"/></svg><div><b>Малыш проснулся</b><span>сегодня в 6:24</span></div></button>
+        <button class="act sleep"><svg viewBox="0 0 24 24"><path d="M15.5 4a8.5 8.5 0 1 0 4.8 12.4A7 7 0 0 1 15.5 4z" fill="#6B8FC0"/></svg><div><b>Малыш уснул</b><span>запишу 18:42</span></div></button>
+        <button class="act night"><svg viewBox="0 0 24 24"><path d="M15.5 4a8.5 8.5 0 1 0 4.8 12.4A7 7 0 0 1 15.5 4z" fill="none" stroke="#8C80D8" stroke-width="1.8"/><circle cx="18" cy="6.5" r="1.8" fill="#E0892F"/></svg><div><b>Проснулся ночью</b><span>с 17:00 до 9:00</span></div></button>
+        <button class="act me"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#1F9C84"/><path d="M12 3.5v4M6.5 5.5l1.5 2.3M17.5 5.5L16 7.8" stroke="#1F9C84" stroke-width="1.8" stroke-linecap="round"/></svg><div><b>Я встал</b><span>в 5:36 · по плану</span></div></button>
+      </div>
+    </section>
+    <section>
+      <h2>День <small>обновлено по прогнозу</small></h2>
+      <div class="strip" aria-hidden="true">
+        <div class="rail"></div>
+        <i style="left:2.8%;width:1%;background:var(--green)"></i>
+        <i style="left:6.8%;width:1.3%;background:var(--amber)"></i>
+        <i style="left:19.4%;width:50%;background:#2A3440"></i>
+        <i style="left:83.7%;width:1.2%;background:var(--cyan);opacity:.6"></i>
+        <i style="left:85.2%;width:8.3%;background:var(--cyan)"></i>
+        <span class="nowl" style="left:76%"></span>
+        <span class="t" style="left:0%;transform:none">5:00</span><span class="t" style="left:22.2%">9:00</span>
+        <span class="t" style="left:55.5%">15:00</span><span class="t" style="left:88.9%">21:00</span>
+      </div>
+      <ol class="tl">
+        <li class="me done"><time>5:31</time><div><b>Ты встаёшь</b><span>45 мин на утреннее чтение · встал в 5:36</span></div></li>
+        <li class="kid band done"><time>6:16–6:38</time><div><b>Малыш проснётся ≈ 6:27</b><span>проснулся в 6:24 · прогноз точный</span></div></li>
+        <li class="work done"><time>8:30–17:30</time><div><b>Работа</b></div></li>
+        <li class="now"><time>18:42</time><span>сейчас</span></li>
+        <li class="kid"><time>≈ 20:35</time><div><b>Отбой малыша</b><span>обычно 20:20–20:50</span></div></li>
+        <li class="slot"><time>20:40–22:10</time><div><b>Свободный слот</b><span>автотест на форму входа</span></div></li>
+      </ol>
+    </section>
+    <section>
+      <h2>Привычки <small>2 из 4</small></h2>
+      <ul class="habs">
+        <li class="hb on"><span class="ck"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><b>Утреннее чтение</b><span>4 из 6 за неделю</span></div><div class="dots"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></div></li>
+        <li class="hb on"><span class="ck"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><b>Записать траты</b><span>2 из 7 · серия 3 недели</span></div><div class="dots"><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i></div></li>
+        <li class="hb"><span class="ck"></span><div><b>Прогулка 20 минут</b><span>1 из 4 · осталось 3 раза</span></div><div class="dots"><i class="f"></i><i></i><i></i><i></i></div></li>
+        <li class="hb"><span class="ck"></span><div><b>Лечь до 23:30</b><span>2 из 5 · осталось 3 раза</span></div><div class="dots"><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div></li>
+      </ul>
+    </section>
+    <section>
+      <h2>Задачи <small>Google Задачи</small></h2>
+      <ul class="tasks">
+        <li class="grp w">Просрочено · 1</li>
+        <li class="tk"><span class="ck"></span><div><b>Оплатить интернет</b><span>Мои задачи · срок 27.09</span></div></li>
+        <li class="grp">На сегодня · 2</li>
+        <li class="tk"><span class="ck"></span><div><b>Купить подгузники</b><span>Дом</span></div></li>
+        <li class="tk"><span class="ck"></span><div><b>Созвон по проекту</b><span>Работа</span></div></li>
+      </ul>
+    </section>
+    <section class="duo"><b>4</b><span>дня с последнего времени вдвоём · норма раз в неделю</span><button>Были вдвоём</button></section>
+  </div>
+  <nav class="tabs">
+    <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>Сегодня</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="14" r="4"/><path d="M12 4v3M5 8l2 2M19 8l-2 2M3 19h18"/></svg>Утро</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>Цели</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19V11M10 19V6M15 19v-9M20 19v-5"/></svg>Итоги</a>
+  </nav>
+</template>
+
+<script>
+const tpl = document.getElementById("screen");
+document.querySelectorAll(".phone").forEach(p => p.appendChild(tpl.content.cloneNode(true)));
+document.querySelectorAll(".tabs a").forEach(a => a.addEventListener("click", e => e.preventDefault()));
+const pick = v => {
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === v)));
+  document.querySelectorAll(".col").forEach(c => c.classList.toggle("on", c.dataset.col === v));
+  try { localStorage.setItem("styles.pick", v); } catch {}
+};
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => pick(b.dataset.v)));
+try { const v = localStorage.getItem("styles.pick"); if (v) pick(v); } catch {}
+</script>
+</body>
+</html>
