@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <div class="wrap">
@@ -34,8 +34,19 @@
       <ul class="today" id="today-list"></ul>
     </section>
 
+    <section id="plan">
+      <div class="sec-head"><h2 id="plan-title">План на завтра</h2><span class="aside" id="plan-date"></span></div>
+      <div class="plan">
+        <div class="plan-rows" id="plan-rows"></div>
+        <div class="ptasks-wrap">
+          <ul class="ptasks" id="plan-tasks"></ul>
+          <p class="pt-foot" id="plan-foot"></p>
+        </div>
+      </div>
+    </section>
+
     <section id="kid">
-      <div class="sec-head"><h2 id="kid-title">Утро малыша</h2><span class="aside" id="kid-aside"></span></div>
+      <div class="sec-head"><h2 id="kid-title">Утро</h2><span class="aside" id="kid-aside"></span></div>
       <div class="forecast">
         <div class="fc-box kid">
           <span class="eyebrow" id="fc-when">Прогноз</span>
@@ -43,7 +54,7 @@
           <p id="fc-range"></p>
         </div>
         <div class="fc-box">
-          <span class="eyebrow">Твой подъём</span>
+          <span class="eyebrow" id="fc-me-when">Твой подъём</span>
           <div class="fc-big" id="fc-alarm">—</div>
           <p id="fc-plan"></p>
         </div>
@@ -59,8 +70,15 @@
           <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20.5 5.5a11 11 0 1 0 6 16.2A9 9 0 0 1 20.5 5.5z" fill="var(--k3)"/></svg>
           <span><b id="kid-sleep-l">Уснул</b><span id="kid-sleep-s">нажми вечером, когда уснёт</span></span>
         </button>
+        <button type="button" class="kbtn" id="kid-night">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20.5 5.5a11 11 0 1 0 6 16.2A9 9 0 0 1 20.5 5.5z" fill="none" stroke="var(--k3)" stroke-width="2.2"/><circle cx="24" cy="9" r="2.2" fill="var(--wake)"/></svg>
+          <span><b id="kid-night-l">Проснулся ночью</b><span id="kid-night-s"></span></span>
+        </button>
+        <button type="button" class="kbtn" id="me-wake">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="14" width="22" height="4" rx="2" fill="var(--pine)"/><path d="M16 5v5M9 8l2 3M23 8l-2 3" stroke="var(--pine)" stroke-width="2.2" stroke-linecap="round"/></svg>
+          <span><b>Я встал</b><span id="me-wake-s"></span></span>
+        </button>
       </div>
-      <p class="undo" id="kid-undo" hidden></p>
 
       <div class="subhead"><h3>Календарь подъёмов</h3>
         <div class="nav">
@@ -71,12 +89,14 @@
       </div>
       <div class="kc" id="kcal"></div>
       <div class="klegend" aria-hidden="true">
-        <span><i class="dot"></i>проснулся</span>
+        <span><i class="dot"></i><span id="lg-kid-wake">проснулся</span></span>
+        <span><i class="bar-me"></i>ты встал</span>
         <span><i style="background:var(--k4)"></i><i style="background:var(--k2)"></i><i style="background:var(--k1)"></i>прогноз: вероятнее → реже</span>
         <span><i style="background:var(--k1)"></i>каким был прогноз в прошлые дни</span>
       </div>
 
-      <div class="tiles" id="kid-tiles"></div>
+      <div class="tiles six" id="kid-tiles"></div>
+      <ul class="insights" id="kid-insights"></ul>
 
       <div class="charts2">
         <figure>
@@ -95,10 +115,12 @@
           <label for="kf-date">День <input class="field" type="date" id="kf-date"></label>
           <label for="kf-wake">Проснулся утром <input class="field" type="time" id="kf-wake"></label>
           <label for="kf-bed">Уснул вечером <input class="field" type="time" id="kf-bed"></label>
+          <label for="kf-nights">Ночью просыпался <input class="field" type="text" id="kf-nights" placeholder="23:40, 2:10" inputmode="numeric"></label>
+          <label for="kf-me">Я встал <input class="field" type="time" id="kf-me"></label>
           <button class="btn" type="submit" id="kf-save">Сохранить</button>
           <button class="btn ghost" type="button" id="kf-clear">Очистить день</button>
         </form>
-        <p class="note">«Уснул вечером» — отбой в этот день. Он влияет на прогноз подъёма следующим утром.</p>
+        <p class="note">«Уснул вечером» и «Ночью просыпался» относятся к ночи, которая начинается в этот день. Они влияют на прогноз подъёма следующим утром.</p>
         <div class="fgrid">
           <label for="ks-name">Имя <input class="field" type="text" id="ks-name" maxlength="30" placeholder="Марк"></label>
           <label for="ks-gen">Утро кого? <input class="field" type="text" id="ks-gen" maxlength="30" placeholder="Марка"></label>
@@ -106,6 +128,24 @@
           <label for="ks-habit">Утренняя привычка <select class="field" id="ks-habit"></select></label>
         </div>
       </details>
+    </section>
+
+    <section id="together">
+      <div class="sec-head"><h2>Время вдвоём</h2>
+        <label class="aside" for="tg-norm">норма <select class="field mini" id="tg-norm"></select></label></div>
+      <div class="tg">
+        <div class="tg-big" id="tg-big"></div>
+        <div>
+          <div class="wstrip" id="tg-weeks"></div>
+          <p class="note" id="tg-weeks-cap"></p>
+        </div>
+      </div>
+      <form class="row" id="tg-form">
+        <label class="sr" for="tg-note">Что делали</label>
+        <input class="field" type="text" id="tg-note" maxlength="80" placeholder="Что делали — необязательно" autocomplete="off">
+        <button class="btn" type="submit" id="tg-btn">Сегодня были вдвоём</button>
+      </form>
+      <ul class="tg-list" id="tg-list"></ul>
     </section>
 
     <section>
@@ -120,6 +160,26 @@
       </div>
       <div class="scroll"><table class="week" id="week-table"></table></div>
       <p class="note">Прошлые дни можно отметить задним числом. Норма считается на неделю, а не на каждый день.</p>
+    </section>
+
+    <section id="goals">
+      <div class="sec-head"><h2>Стратегические цели</h2><span class="aside" id="goals-aside"></span></div>
+      <div class="glist" id="goal-list"></div>
+      <details class="sub" id="goal-add">
+        <summary>Добавить цель</summary>
+        <form class="fgrid" id="ga-form">
+          <label for="ga-title" class="wide">Цель <input class="field" type="text" id="ga-title" maxlength="80" placeholder="Например: накопить на машину" required></label>
+          <label for="ga-kind">Как измерять <select class="field" id="ga-kind">
+            <option value="number">числом</option><option value="steps">этапами</option></select></label>
+          <label for="ga-sphere">Сфера <select class="field" id="ga-sphere"></select></label>
+          <label for="ga-deadline">Срок <input class="field" type="date" id="ga-deadline" required></label>
+          <label for="ga-start" data-k="number">Сейчас <input class="field" type="number" step="any" id="ga-start" value="0"></label>
+          <label for="ga-target" data-k="number">Цель <input class="field" type="number" step="any" id="ga-target"></label>
+          <label for="ga-unit" data-k="number">Единица <input class="field" type="text" id="ga-unit" maxlength="12" placeholder="₽, кг, шт"></label>
+          <label for="ga-steps" class="wide" data-k="steps" hidden>Этапы, по одному в строке <textarea class="field" id="ga-steps" rows="4"></textarea></label>
+          <button class="btn" type="submit">Добавить цель</button>
+        </form>
+      </details>
     </section>
 
     <section id="progress">
@@ -161,6 +221,23 @@
       </div>
     </section>
 
+    <section id="system">
+      <div class="sec-head"><h2>Система</h2><span class="aside" id="sys-aside"></span></div>
+      <div class="tiles" id="sys-tiles"></div>
+      <div class="sys-grid">
+        <div>
+          <h3 class="h3">Гигиена задач</h3>
+          <ul class="plain checks" id="sys-checks"></ul>
+        </div>
+        <div>
+          <h3 class="h3">Обзор недели</h3>
+          <div class="wstrip" id="rv-weeks"></div>
+          <p class="rv-text" id="rv-text"></p>
+          <button type="button" class="btn" id="rv-btn">Обзор этой недели проведён</button>
+        </div>
+      </div>
+    </section>
+
     <section>
       <details class="panel" id="manage">
         <summary>Настроить привычки <span class="aside"><span class="closed">открыть</span><span class="opened">свернуть</span></span></summary>
@@ -179,6 +256,32 @@
           <ul class="mlist" id="alist"></ul>
         </div>
         <p class="note">Лучше держать 4–6 привычек. Архив прячет привычку, но сохраняет её отметки.</p>
+      </details>
+    </section>
+
+    <section>
+      <details class="panel" id="settings-panel">
+        <summary>Настройки дашборда <span class="aside"><span class="closed">открыть</span><span class="opened">свернуть</span></span></summary>
+        <h3 class="h3 top">Свободные слоты</h3>
+        <p class="note">Время, которое у тебя есть на свои дела. План показывает ближайший слот.</p>
+        <ul class="mlist" id="slot-list"></ul>
+        <button type="button" class="btn ghost" id="slot-add">Добавить слот</button>
+
+        <h3 class="h3 top">Google Задачи</h3>
+        <p class="state" id="gt-state"></p>
+        <ol class="steps">
+          <li>Открой <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com</a> — создастся новый проект.</li>
+          <li>Сотри всё в редакторе и вставь код из <a href="https://github.com/1337David1337/habits/blob/main/google-tasks.gs" target="_blank" rel="noopener">google-tasks.gs</a>. Сохрани.</li>
+          <li>Слева «Сервисы» → «+» → Google Tasks API → «Добавить».</li>
+          <li>Сверху выбери функцию <code>setup</code> → «Выполнить» → разреши доступ. В журнале появится ключ.</li>
+          <li>«Начать развёртывание» → «Новое развёртывание» → тип «Веб-приложение», запуск от твоего имени, доступ «Все». Скопируй URL.</li>
+          <li>Вставь URL и ключ ниже.</li>
+        </ol>
+        <form class="fgrid" id="gt-form" autocomplete="off">
+          <label for="gt-url" class="wide">URL веб-приложения <input class="field" type="url" id="gt-url" placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false"></label>
+          <label for="gt-key">Ключ <input class="field" type="password" id="gt-key" spellcheck="false"></label>
+          <button class="btn" type="submit">Сохранить</button>
+        </form>
       </details>
     </section>
   </div>
@@ -215,7 +318,8 @@
 
   <footer id="footer">Данные хранятся в data.json приватного репозитория. Каждое сохранение — коммит.</footer>
 </div>
+<div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

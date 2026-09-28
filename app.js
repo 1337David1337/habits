@@ -3,10 +3,11 @@
 const DOW = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="var(--pine-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const LS = { cfg: "habits.cfg", base: "habits.base", pending: "habits.pending", view: "habits.view" };
+const LS = { cfg: "habits.cfg", base: "habits.base", pending: "habits.pending", view: "habits.view", tasks: "habits.tasks" };
 const DEFAULT_SETTINGS = {
   busyDays: [], busyLabel: "", spheres: ["работа","семья","здоровье","дом","деньги"],
   kidName: "", kidNameGen: "", morningMinutes: 30, morningHabit: "",
+  slots: [], tasksUrl: "", tasksKey: "", togetherPerWeek: 1,
 };
 // Прогноз подъёма: окно истории, период полураспада веса и шаг календаря
 const K_WINDOW = 42, K_HALF = 10, SLOT = 15;
@@ -53,7 +54,7 @@ const S = {
   data: null, memo: null, sync: "idle", savedAt: null, saving: false, again: false,
   weekOffset: 0, confirmDelete: null,
   view: lsGet(LS.view) === "quarter" ? "quarter" : "month", monthOffset: 0, quarterOffset: 0,
-  kidOffset: 0, kidUndo: null,
+  kidOffset: 0, undo: null, recMemo: new Map(), confirmGoal: null,
 };
 
 function applyOp(d, op) {
@@ -66,10 +67,38 @@ function applyOp(d, op) {
     if (h) Object.assign(h, op.data); else d.habits.push({ id: op.id, ...op.data });
   } else if (op.t === "del") {
     d.habits = d.habits.filter(x => x.id !== op.id);
-  } else if (op.t === "kid") {
-    const day = { ...(d.kid[op.date] || {}) };
-    for (const [k, v] of Object.entries(op.data)) { if (v == null || v === "") delete day[k]; else day[k] = v; }
-    if (Object.keys(day).length) d.kid[op.date] = day; else delete d.kid[op.date];
+  } else if (op.t === "kid" || op.t === "me") {
+    const box = op.t === "kid" ? d.kid : d.me, day = { ...(box[op.date] || {}) };
+    for (const [k, v] of Object.entries(op.data)) {
+      if (v == null || v === "" || (Array.isArray(v) && !v.length)) delete day[k]; else day[k] = v;
+    }
+    if (Object.keys(day).length) box[op.date] = day; else delete box[op.date];
+  } else if (op.t === "together") {
+    if (op.data == null) delete d.together[op.date];
+    else d.together[op.date] = { ...(d.together[op.date] || {}), ...op.data };
+  } else if (op.t === "review") {
+    if (op.date == null) delete d.reviews[op.week]; else d.reviews[op.week] = op.date;
+  } else if (op.t === "goal") {
+    const g = d.goals.find(x => x.id === op.id);
+    if (g) Object.assign(g, op.data); else d.goals.push({ id: op.id, history: [], steps: [], ...op.data });
+  } else if (op.t === "goalDel") {
+    d.goals = d.goals.filter(x => x.id !== op.id);
+  } else if (op.t === "goalLog") {
+    const g = d.goals.find(x => x.id === op.id);
+    if (g) {
+      g.history = (g.history || []).filter(x => x.d !== op.d);
+      if (op.v != null) g.history.push({ d: op.d, v: op.v });
+      g.history.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+    }
+  } else if (op.t === "goalStep") {
+    const g = d.goals.find(x => x.id === op.id);
+    if (g) {
+      g.steps = g.steps || [];
+      const st = g.steps.find(x => x.id === op.sid);
+      if (op.data == null) g.steps = g.steps.filter(x => x.id !== op.sid);
+      else if (st) Object.assign(st, op.data);
+      else g.steps.push({ id: op.sid, done: false, ...op.data });
+    }
   } else if (op.t === "settings") {
     Object.assign(d.settings, op.data);
   }
@@ -79,10 +108,11 @@ function normalize(d) {
   d = d && typeof d === "object" ? d : {};
   const obj = v => v && typeof v === "object" && !Array.isArray(v) ? v : {};
   return { version: 1, ...d, settings: { ...DEFAULT_SETTINGS, ...obj(d.settings) },
-    habits: Array.isArray(d.habits) ? d.habits : [], log: obj(d.log), kid: obj(d.kid) };
+    habits: Array.isArray(d.habits) ? d.habits : [], log: obj(d.log), kid: obj(d.kid),
+    me: obj(d.me), together: obj(d.together), reviews: obj(d.reviews), goals: Array.isArray(d.goals) ? d.goals : [] };
 }
 function recompute() {
-  S.memo = null;
+  S.memo = null; S.recMemo = new Map();
   if (!S.base) { S.data = null; return; }
   const d = normalize(clone(S.base.data));
   for (const op of S.pending) applyOp(d, op);
@@ -99,6 +129,15 @@ const isDone = (date, hid) => S.data?.log[date]?.[hid] === true;
 const canWrite = () => !!(S.cfg && S.data);
 const kidName = () => settings().kidName || "Малыш";
 const kidGen = () => settings().kidNameGen || settings().kidName || "малыша";
+const meWakeOf = k => toMin(S.data?.me[k]?.wake);
+const fmt1 = v => v.toFixed(1).replace(".", ",");
+const fmtN = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
+const fmtDate = d => `${fmtDay.format(d)} ${d.getFullYear()}`;
+const smart = v => fmtN.format(Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10);
+function diffText(d) {
+  d = Math.round(d);
+  return Math.abs(d) <= 5 ? "по плану" : d > 0 ? `на ${d} мин позже плана` : `на ${-d} мин раньше плана`;
+}
 
 /* ---------- GitHub ---------- */
 function b64dec(b64) {
@@ -138,9 +177,15 @@ function commitMsg(ops) {
   const days = [...new Set([...on, ...off].map(o => fmtDM.format(parse(o.date))))];
   const parts = [];
   if (on.length || off.length) parts.push(`Отметки ${days.join(", ")}: ${[on.length && "+" + on.length, off.length && "−" + off.length].filter(Boolean).join(" ")}`);
+  const F = { wake: "подъём", bed: "отбой", nights: "ночью" };
   const kid = ops.filter(o => o.t === "kid").flatMap(o => Object.entries(o.data).map(([f, v]) =>
-    `${f === "wake" ? "подъём" : "отбой"} ${fmtDM.format(parse(o.date))} ${v || "удалён"}`));
+    `${F[f] || f} ${fmtDM.format(parse(o.date))} ${Array.isArray(v) ? v.join(", ") : v || "удалён"}`));
   if (kid.length) parts.push(`${kidName()}: ${kid.join(", ")}`);
+  const me = ops.filter(o => o.t === "me").map(o => `${fmtDM.format(parse(o.date))} ${o.data.wake || "удалён"}`);
+  if (me.length) parts.push(`Мой подъём: ${me.join(", ")}`);
+  if (ops.some(o => o.t === "together")) parts.push("время вдвоём");
+  if (ops.some(o => o.t === "review")) parts.push("обзор недели");
+  if (ops.some(o => o.t.startsWith("goal"))) parts.push("цели");
   if (ops.some(o => o.t === "habit" || o.t === "del")) parts.push("настройка привычек");
   if (ops.some(o => o.t === "settings")) parts.push("настройки");
   return parts.join("; ") || "Обновление";
@@ -167,6 +212,7 @@ async function refresh() {
   try {
     S.base = await pull(); persist(); recompute();
     setSync(S.pending.length ? "pending" : "saved");
+    loadTasks();
     if (S.pending.length) schedule(0);
   } catch (e) { setSync(e instanceof TypeError ? "offline" : "error", e); }
   render();
@@ -350,6 +396,13 @@ function forecast(target) {
   const half = m.half ?? Math.max(15, Math.min(60, (b.hi - b.lo) / 2 || 15));
   return { pred, lo: pred - half, hi: pred + half, half, b, p, wp: p ? m.wp : 0, mae: m.mae, nBt: m.nBt };
 }
+// Когда вставать самому: самый ранний ожидаемый подъём минус время на утро
+function recFor(k) {
+  if (S.recMemo.has(k)) return S.recMemo.get(k);
+  const f = forecast(k), v = f ? f.lo - (settings().morningMinutes || 30) : null;
+  S.recMemo.set(k, v);
+  return v;
+}
 function kidTarget() {
   const t = todayDate(), tk = ymd(t);
   if (wakeOf(tk) == null && new Date().getHours() < 12) return tk;
@@ -455,7 +508,8 @@ function render() {
   renderSync(); renderHeader(); renderConnect();
   $("#main").hidden = !S.data;
   if (!S.data) return;
-  renderToday(); renderKid(); renderWeek(); renderProgress(); renderManage();
+  renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
+  renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
 }
 function renderHeader() {
   const t = todayDate(), tk = ymd(t);
@@ -488,9 +542,9 @@ function renderToday() {
 
 function renderKid() {
   const st = settings(), name = kidName(), t = todayDate(), tk = ymd(t);
-  $("#kid-title").textContent = `Утро ${kidGen()}`;
+  $("#kid-title").textContent = "Утро";
   const target = kidTarget(), isToday = target === tk, fc = forecast(target);
-  $("#fc-when").textContent = `Прогноз на ${isToday ? "сегодня" : "завтра"}, ${fmtShort.format(parse(target))}`;
+  $("#fc-when").textContent = `${name} проснётся · ${isToday ? "сегодня" : "завтра"}, ${fmtShort.format(parse(target))}`;
   const mh = habits().find(h => h.id === st.morningHabit), mins = st.morningMinutes || 30;
   const what = mh ? `«${mh.name}»` : "утреннее время";
   if (!fc) {
@@ -517,18 +571,25 @@ function renderKid() {
     $("#kid-aside").textContent = "";
   }
   // Кнопки
-  const w = S.data.kid[tk]?.wake, bd = bedDateNow(), b = S.data.kid[bd]?.bed;
+  const hr = new Date().getHours(), night = hr < 4, nightOk = hr >= 17 || hr < 9, meOk = hr >= 3 && hr < 14;
+  const nowT = hm(toMin(nowHM()));
+  const w = S.data.kid[tk]?.wake, bd = bedDateNow(), b = S.data.kid[bd]?.bed, nts = S.data.kid[bd]?.nights || [];
   $("#kid-wake-l").textContent = `${name} проснулся`;
-  const night = new Date().getHours() < 4;
   $("#kid-wake-s").textContent = night ? "сейчас ночь: утренний подъём отмечается с 4:00"
-    : w ? `сегодня в ${hm(toMin(w))} · нажми, чтобы заменить на ${hm(toMin(nowHM()))}` : `запишу ${hm(toMin(nowHM()))}`;
+    : w ? `сегодня в ${hm(toMin(w))} · нажми, чтобы заменить на ${nowT}` : `запишу ${nowT}`;
   $("#kid-sleep-l").textContent = `${name} уснул`;
-  $("#kid-sleep-s").textContent = b ? `${bd === tk ? "сегодня" : "вчера"} в ${hm(toMin(b))} · нажми, чтобы заменить` : `запишу ${hm(toMin(nowHM()))} как отбой`;
+  $("#kid-sleep-s").textContent = b ? `${bd === tk ? "сегодня" : "вчера"} в ${hm(toMin(b))} · нажми, чтобы заменить` : `запишу ${nowT} как отбой`;
+  $("#kid-night-l").textContent = `${name} проснулся ночью`;
+  $("#kid-night-s").textContent = !nightOk ? "работает с 17:00 до 9:00"
+    : nts.length ? `этой ночью: ${nts.map(x => hm(toMin(x))).join(", ")} · добавлю ${nowT}` : `запишу ${nowT}`;
+  const mw = S.data.me[tk]?.wake, rec = recFor(tk);
+  $("#me-wake-s").textContent = mw ? `сегодня в ${hm(toMin(mw))}${rec != null ? ` · ${diffText(toMin(mw) - rec)}` : ""}`
+    : !meOk ? "отмечается утром" : rec != null ? `план ${hm(rec)} · запишу ${nowT}` : `запишу ${nowT}`;
   $("#kid-wake").disabled = !canWrite() || night;
   $("#kid-sleep").disabled = !canWrite();
-  const u = $("#kid-undo");
-  u.hidden = !S.kidUndo;
-  if (S.kidUndo) u.innerHTML = `Записал: ${esc(S.kidUndo.text)}. <button type="button" class="linkbtn" id="kid-undo-btn">Отменить</button>`;
+  $("#kid-night").disabled = !canWrite() || !nightOk;
+  $("#me-wake").disabled = !canWrite() || !meOk;
+  $("#lg-kid-wake").textContent = `${name} проснулся`;
   $("#lg-kid").textContent = `подъём ${kidGen()}`;
   renderKidCal(fc, target);
   renderKidTiles();
@@ -545,7 +606,7 @@ function renderKidCal(fc, target) {
   $("#kc-next").disabled = S.kidOffset >= 0;
   // Диапазон часов: 5:00–9:00 и шире, если данные выходят за край
   let lo = 300, hi = 540;
-  const pts = days.map(d => wakeOf(ymd(d))).filter(v => v != null);
+  const pts = days.flatMap(d => [wakeOf(ymd(d)), meWakeOf(ymd(d))]).filter(v => v != null);
   if (showFc) pts.push(fc.lo, fc.hi);
   days.forEach(d => { const x = m.btMap.get(ymd(d)); const c = x && m.comb(x); if (c != null && m.half) pts.push(c - m.half, c + m.half); });
   pts.forEach(v => { lo = Math.min(lo, Math.floor(v / 60) * 60); hi = Math.max(hi, Math.ceil((v + 1) / 60) * 60); });
@@ -568,19 +629,23 @@ function renderKidCal(fc, target) {
         if (lv) cls.push("f" + lv);
         tip = `${fmtShort.format(d)} · ${hm(a)}–${hm(z)}${lv >= 3 ? " · самое вероятное время" : lv ? " · возможно" : ""}`;
       } else if (d <= todayDate()) {
-        const w = wakeOf(k), x = m.btMap.get(k), c = x ? m.comb(x) : null;
+        const w = wakeOf(k), me = meWakeOf(k), x = m.btMap.get(k), c = x ? m.comb(x) : null;
         if (c != null && m.half && z > c - m.half && a < c + m.half) cls.push("band");
-        if (w != null && w >= a && w < z) {
-          cls.push("wk");
-          tip = `${fmtShort.format(d)} · проснулся в ${hm(w)}${c != null ? ` · прогноз был ${hm(c)}` : ""}`;
-        } else tip = `${fmtShort.format(d)} · ${hm(a)}–${hm(z)}${c != null && cls.includes("band") ? ` · в прогнозе было ${hm(c)}` : ""}`;
+        const bits = [];
+        if (w != null && w >= a && w < z) { cls.push("wk"); bits.push(`${kidName()} проснулся в ${hm(w)}${c != null ? ` (прогноз ${hm(c)})` : ""}`); }
+        if (me != null && me >= a && me < z) { cls.push("me"); bits.push(`ты встал в ${hm(me)}`); }
+        tip = `${fmtShort.format(d)} · ` + (bits.length ? bits.join(" · ")
+          : `${hm(a)}–${hm(z)}${c != null && cls.includes("band") ? ` · в прогнозе было ${hm(c)}` : ""}`);
       }
       s += `<span class="${cls.join(" ")}" data-tip="${esc(tip)}"></span>`;
     }
   }
   if (!narrow) {
-    s += `<span class="kc-foot-l">подъём</span>` + days.map(d => { const w = wakeOf(ymd(d)); return `<span class="kc-foot w">${w != null ? hm(w) : ""}</span>`; }).join("");
-    s += `<span class="kc-foot-l">отбой</span>` + days.map(d => { const b = bedOf(ymd(addDays(d, -1))); return `<span class="kc-foot">${b != null ? hm(b) : ""}</span>`; }).join("");
+    const row = (label, fn, cls = "") => `<span class="kc-foot-l">${label}</span>` + days.map(d => `<span class="kc-foot ${cls}">${fn(d) ?? ""}</span>`).join("");
+    s += row("подъём", d => { const v = wakeOf(ymd(d)); return v != null ? hm(v) : null; }, "w");
+    s += row("ты", d => { const v = meWakeOf(ymd(d)); return v != null ? hm(v) : null; }, "me");
+    s += row("отбой", d => { const v = bedOf(ymd(addDays(d, -1))); return v != null ? hm(v) : null; });
+    s += row("ночью", d => { const n = S.data.kid[ymd(addDays(d, -1))]?.nights?.length; return n ? String(n) : null; });
   }
   box.innerHTML = s + "</div>";
 }
@@ -596,13 +661,60 @@ function recentKid(days) {
 }
 const median = a => a.length ? wq(a, a.map(() => 1), .5) : null;
 function renderKidTiles() {
-  const r = recentKid(30), m = kidModel();
+  const r = recentKid(30), m = kidModel(), t = todayDate();
+  let nn = 0, nc = 0, onPlan = 0, meDays = 0;
+  for (let i = 1; i <= 14; i++) {
+    const v = S.data.kid[ymd(addDays(t, -i))];
+    if (v && (v.bed || v.nights)) { nc++; nn += (v.nights || []).length; }
+  }
+  for (let i = 0; i < 14; i++) {
+    const k = ymd(addDays(t, -i)), me = meWakeOf(k), rec = recFor(k);
+    if (me != null && rec != null) { meDays++; if (me <= rec + 10) onPlan++; }
+  }
   const tile = (v, l) => `<div><b>${v ?? "—"}</b><span>${l}</span></div>`;
   $("#kid-tiles").innerHTML =
-    tile(r.wakes.length ? hm(median(r.wakes)) : null, "обычно встаёт") +
-    tile(r.beds.length ? hm(median(r.beds)) : null, "обычно засыпает") +
+    tile(r.wakes.length ? hm(median(r.wakes)) : null, `${kidName()} встаёт`) +
+    tile(r.beds.length ? hm(median(r.beds)) : null, "засыпает") +
     tile(r.nights.length ? dur(median(r.nights)) : null, "ночной сон") +
-    tile(m.mae != null ? `±${Math.round(m.mae)} мин` : null, "точность прогноза");
+    tile(nc ? fmt1(nn / nc) : null, "пробуждений за ночь") +
+    tile(m.mae != null ? `±${Math.round(m.mae)} мин` : null, "точность прогноза") +
+    tile(meDays ? `${onPlan} из ${meDays}` : null, "ты встал по плану");
+  renderInsights();
+}
+function renderInsights() {
+  const t = todayDate(), out = [], st = settings(), name = kidName();
+  const lo = [], hi = [];
+  for (let i = 1; i <= 60; i++) {
+    const d = addDays(t, -i), v = S.data.kid[ymd(d)], w = wakeOf(ymd(addDays(d, 1)));
+    if (!v || !(v.bed || v.nights) || w == null) continue;
+    ((v.nights || []).length >= 2 ? hi : lo).push(w);
+  }
+  if (lo.length >= 3 && hi.length >= 3) {
+    const dlt = Math.round(mean(hi) - mean(lo));
+    out.push(Math.abs(dlt) >= 5
+      ? `После ночей с двумя и больше пробуждениями ${name} встаёт в среднем на ${Math.abs(dlt)} мин ${dlt > 0 ? "позже" : "раньше"}.`
+      : `Ночные пробуждения почти не сдвигают утренний подъём ${kidGen()}.`);
+  }
+  const per = (from, to) => {
+    let n = 0, c = 0;
+    for (let i = from; i <= to; i++) { const v = S.data.kid[ymd(addDays(t, -i))]; if (v && (v.bed || v.nights)) { c++; n += (v.nights || []).length; } }
+    return c >= 4 ? n / c : null;
+  };
+  const a = per(1, 7), b = per(8, 14);
+  if (a != null && b != null && Math.abs(a - b) >= .3)
+    out.push(`Пробуждений за ночь стало ${a < b ? "меньше" : "больше"}: ${fmt1(a)} за последнюю неделю против ${fmt1(b)} неделей раньше.`);
+  const mh = st.morningHabit && habits().find(h => h.id === st.morningHabit);
+  if (mh) {
+    const y = [], n = [];
+    for (let i = 0; i < 60; i++) {
+      const k = ymd(addDays(t, -i)), me = meWakeOf(k), rec = recFor(k);
+      if (me == null || rec == null) continue;
+      (me <= rec + 10 ? y : n).push(isDone(k, mh.id));
+    }
+    if (y.length >= 3 && n.length >= 3)
+      out.push(`Когда встаёшь по плану, «${mh.name}» получается в ${pct(y.filter(Boolean).length / y.length)} дней, а когда позже — в ${pct(n.filter(Boolean).length / n.length)}.`);
+  }
+  $("#kid-insights").innerHTML = out.map(x => `<li>${esc(x)}</li>`).join("");
 }
 function renderKidCharts() {
   const t = todayDate(), pts = [];
@@ -647,6 +759,8 @@ function fillKidForm(k) {
   const v = S.data?.kid[k] || {};
   $("#kf-date").value = k; $("#kf-date").max = ymd(todayDate());
   $("#kf-wake").value = v.wake || ""; $("#kf-bed").value = v.bed || "";
+  $("#kf-nights").value = (v.nights || []).map(x => hm(toMin(x))).join(", ");
+  $("#kf-me").value = S.data?.me[k]?.wake || "";
 }
 
 function renderWeek() {
@@ -812,6 +926,346 @@ function renderConnect() {
   $("#cf-save").textContent = connected ? "Сохранить" : "Подключить";
 }
 
+/* ---------- всплывающее «Отменить» ---------- */
+let toastTimer = null;
+function toast(text, undo) {
+  const el = $("#toast");
+  S.undo = undo || null;
+  el.innerHTML = `<span>${esc(text)}</span>${undo ? '<button type="button" id="toast-undo">Отменить</button>' : ""}`;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 8000);
+}
+function hideToast() { $("#toast").hidden = true; S.undo = null; }
+
+/* ---------- Google Задачи (через Apps Script) ---------- */
+const T = { data: lsGet(LS.tasks), loading: false, error: null, loadedAt: 0 };
+function tasksUrl() {
+  const st = settings();
+  if (!st.tasksUrl || !st.tasksKey) return null;
+  return st.tasksUrl + (st.tasksUrl.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(st.tasksKey);
+}
+async function loadTasks(force) {
+  const url = tasksUrl();
+  if (!url || T.loading || (!force && Date.now() - T.loadedAt < 60000)) return;
+  T.loading = true; renderPlan(); renderSettingsPanel();
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    const j = await r.json();
+    if (j.error) throw Object.assign(new Error(j.error), { code: j.error });
+    T.data = { at: Date.now(), lists: j.lists || [], tasks: j.tasks || [] };
+    lsSet(LS.tasks, T.data);
+    T.error = null;
+  } catch (e) { T.error = e; }
+  T.loadedAt = Date.now(); T.loading = false;
+  renderPlan(); renderSystem(); renderSettingsPanel();
+}
+function tasksError() {
+  if (!T.error) return "";
+  return T.error.code === "forbidden" ? "Google Задачи: ключ не подошёл. Проверь его в «Настройках дашборда»."
+    : "Не удалось получить Google Задачи. Проверь адрес веб-приложения и что у развёртывания доступ «Все».";
+}
+async function taskSet(task, done) {
+  const st = settings(), before = { status: task.status, completed: task.completed };
+  task.status = done ? "completed" : "needsAction";
+  task.completed = done ? new Date().toISOString() : null;
+  task.touched = true;
+  renderPlan(); renderSystem();
+  try {
+    const r = await fetch(st.tasksUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ key: st.tasksKey, action: done ? "complete" : "reopen", listId: task.listId, id: task.id }) });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    lsSet(LS.tasks, T.data);
+    if (done) toast(`Готово: ${task.title}`, () => taskSet(task, false));
+  } catch (e) {
+    Object.assign(task, before);
+    notice("Не удалось отметить задачу в Google Задачах. Проверь связь и попробуй ещё раз.");
+    renderPlan(); renderSystem();
+  }
+}
+
+/* ---------- план ---------- */
+const ICON = {
+  sun: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="12" r="4" fill="var(--wake)"/><path d="M10 3v2.5M4 6l1.6 1.6M16 6l-1.6 1.6M2 17h16" stroke="var(--wake)" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>',
+  me: '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="9" width="14" height="3" rx="1.5" fill="var(--pine)"/><path d="M10 3v3.5M5.5 5l1.3 2M14.5 5l-1.3 2" stroke="var(--pine)" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  clock: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="var(--ink-soft)" stroke-width="1.8"/><path d="M10 5.5V10l3 2" stroke="var(--ink-soft)" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>',
+  heart: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 17s-6.5-4-6.5-8.6A3.6 3.6 0 0 1 10 6a3.6 3.6 0 0 1 6.5 2.4C16.5 13 10 17 10 17z" fill="var(--gold)"/></svg>',
+};
+const planTarget = () => new Date().getHours() < 12 ? todayDate() : addDays(todayDate(), 1);
+function slotsOn(d) { return (settings().slots || []).filter(x => x.dow === dow(d)).sort((a, b) => a.from < b.from ? -1 : 1); }
+function nextSlot(d) {
+  for (let i = 1; i <= 7; i++) { const x = addDays(d, i), sl = slotsOn(x); if (sl.length) return { date: x, ...sl[0] }; }
+  return null;
+}
+function renderPlan() {
+  if (!S.data) return;
+  const t = planTarget(), tk = ymd(t), isToday = tk === ymd(todayDate()), st = settings(), name = kidName();
+  const row = (icon, b, span, cls = "") => `<div class="prow ${cls}">${icon}<div><b>${esc(b)}</b>${span ? `<span>${esc(span)}</span>` : ""}</div></div>`;
+  $("#plan-title").textContent = `План на ${isToday ? "сегодня" : "завтра"}`;
+  $("#plan-date").textContent = fmtLong.format(t);
+  const rows = [];
+  const kw = wakeOf(tk), f = forecast(tk);
+  if (kw != null) rows.push(row(ICON.sun, `${name} проснулся в ${hm(kw)}`, ""));
+  else if (f) rows.push(row(ICON.sun, `${name} проснётся около ${hm(f.pred)}`, `скорее всего между ${hm(f.lo)} и ${hm(f.hi)}`));
+  else rows.push(row(ICON.sun, `Прогноз подъёма ${kidGen()} пока не готов`, "нужно ещё несколько отмеченных утр"));
+  const mw = S.data.me[tk]?.wake, rec = recFor(tk), mh = habits().find(h => h.id === st.morningHabit);
+  if (mw) rows.push(row(ICON.me, `Ты встал в ${hm(toMin(mw))}`, rec != null ? diffText(toMin(mw) - rec) : ""));
+  else if (rec != null) rows.push(row(ICON.me, `Тебе вставать в ${hm(rec)}`, `${st.morningMinutes || 30} мин на ${mh ? `«${mh.name}»` : "утреннее время"}`));
+  const sl = slotsOn(t), busy = new Set(st.busyDays || []);
+  if (sl.length) rows.push(row(ICON.clock, `Свободный слот ${sl.map(x => `${x.from}–${x.to}`).join(", ")}`, "время на свои дела"));
+  else {
+    const nx = nextSlot(t);
+    rows.push(row(ICON.clock, busy.has(dow(t)) && st.busyLabel ? `Вечер: ${st.busyLabel}` : "Свободного слота нет",
+      nx ? `ближайший — ${fmtShort.format(nx.date)}, ${nx.from}–${nx.to}` : (st.slots || []).length ? "" : "слоты задаются в «Настройках дашборда»"));
+  }
+  const tg = togetherInfo();
+  if (tg.overdue) rows.push(row(ICON.heart, `Вдвоём не были ${tg.days} ${plural(tg.days, "день", "дня", "дней")}`, `норма — ${tg.normText}`, "warn"));
+  $("#plan-rows").innerHTML = rows.join("");
+
+  const ul = $("#plan-tasks"), foot = $("#plan-foot");
+  if (!tasksUrl()) {
+    ul.innerHTML = `<li class="empty">Подключи Google Задачи в «Настройках дашборда» — здесь появятся задачи с датой на ${isToday ? "сегодня" : "завтра"}.</li>`;
+    foot.textContent = ""; return;
+  }
+  if (!T.data) {
+    ul.innerHTML = `<li class="empty">${T.loading ? "Загружаю задачи…" : esc(tasksError() || "Задачи ещё не загружены.")}</li>`;
+    foot.textContent = ""; return;
+  }
+  const today = ymd(todayDate());
+  const open = T.data.tasks.filter(x => x.status !== "completed" || x.touched);
+  const byDue = (a, b) => (a.due || "") < (b.due || "") ? -1 : 1;
+  const groups = [
+    ["Просрочено", open.filter(x => x.due && x.due < today).sort(byDue), "warn"],
+    ["Осталось на сегодня", isToday ? [] : open.filter(x => x.due === today), ""],
+    [isToday ? "На сегодня" : "На завтра", open.filter(x => x.due === tk), ""],
+  ].filter(g => g[1].length);
+  const li = x => `<li class="pt ${x.status === "completed" ? "done" : ""}"><button type="button" data-task="${esc(x.id)}" aria-label="${x.status === "completed" ? "Вернуть задачу" : "Отметить выполненной"}: ${esc(x.title)}">${CHECK}</button>
+    <span class="pt-t">${esc(x.title)}<small>${esc(x.list)}${x.due && x.due < today ? ` · срок ${fmtDM.format(parse(x.due))}` : ""}</small></span></li>`;
+  const undated = open.filter(x => !x.due && x.status !== "completed").length;
+  ul.innerHTML = groups.length
+    ? groups.map(([title, list, cls]) => `<li class="grp ${cls}">${title} · ${list.length}</li>` + list.slice(0, 8).map(li).join("")
+      + (list.length > 8 ? `<li class="empty">и ещё ${list.length - 8}</li>` : "")).join("")
+    : `<li class="empty">На ${isToday ? "сегодня" : "завтра"} задач с датой нет.${undated ? ` Без даты: ${undated}.` : ""}</li>`;
+  foot.innerHTML = `Google Задачи · ${T.loading ? "обновляю…" : `обновлено ${fmtTime.format(new Date(T.data.at))}`} · <button type="button" class="linkbtn" id="tasks-reload">Обновить</button>`
+    + (T.error ? ` · <span class="warn-t">${esc(tasksError())}</span>` : "");
+}
+
+/* ---------- время вдвоём ---------- */
+function togetherInfo() {
+  const st = settings(), norm = st.togetherPerWeek || 1, dates = Object.keys(S.data?.together || {}).sort();
+  const last = dates[dates.length - 1] || null;
+  const days = last ? Math.round((todayDate() - parse(last)) / 864e5) : null;
+  const gap = Math.ceil(7 / norm);
+  const normText = norm === 1 ? "раз в неделю" : `${norm} ${plural(norm, "раз", "раза", "раз")} в неделю`;
+  return { norm, dates, last, days, gap, normText, overdue: days != null && days > gap };
+}
+function renderTogether() {
+  const tg = togetherInfo(), tk = ymd(todayDate()), T2 = S.data.together;
+  if ($("#tg-norm") !== document.activeElement)
+    $("#tg-norm").innerHTML = [1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === tg.norm ? "selected" : ""}>${n === 1 ? "раз" : n + " раза"} в нед.</option>`).join("");
+  const big = $("#tg-big");
+  if (!tg.last) big.innerHTML = `<b>—</b><span>пока нет записей</span><small>Отмечай вечера, прогулки и разговоры вдвоём. Счётчик покажет, сколько дней прошло с последнего.</small>`;
+  else if (tg.days === 0) big.innerHTML = `<b>0</b><span>сегодня были вдвоём</span><small>${esc(T2[tg.last]?.note || "")}</small>`;
+  else big.innerHTML = `<b class="${tg.overdue ? "warn" : ""}">${tg.days}</b><span>${plural(tg.days, "день", "дня", "дней")} с последнего времени вдвоём</span>
+    <small>последний раз: ${fmtShort.format(parse(tg.last))}${T2[tg.last]?.note ? ` — ${esc(T2[tg.last].note)}` : ""}</small>`;
+  const cur = monday(todayDate()), first = tg.dates[0] ? monday(parse(tg.dates[0])) : null;
+  let cells = "", met = 0, counted = 0;
+  for (let i = 11; i >= 0; i--) {
+    const mon = addDays(cur, -7 * i), keys = tg.dates.filter(k => k >= ymd(mon) && k <= ymd(addDays(mon, 6)));
+    const isCur = i === 0, before = !first || mon < first;
+    if (!isCur && !before) { counted++; if (keys.length >= tg.norm) met++; }
+    const cls = before && !keys.length ? "none" : keys.length >= tg.norm ? "on" : keys.length ? "part" : "";
+    cells += `<span class="${cls} ${isCur ? "cur" : ""}" data-tip="${esc(`${fmtDay.format(mon)} – ${fmtDay.format(addDays(mon, 6))} · ${keys.length ? keys.length + " " + plural(keys.length, "раз", "раза", "раз") : "не было"}${isCur ? " · неделя идёт" : ""}`)}"></span>`;
+  }
+  $("#tg-weeks").innerHTML = cells;
+  $("#tg-weeks-cap").textContent = counted ? `Последние 12 недель. Норма выполнена в ${met} из ${counted} прошедших недель с первой записи.` : "Последние 12 недель: закрашена неделя, где норма выполнена.";
+  $("#tg-btn").textContent = T2[tk] ? "Изменить заметку" : "Сегодня были вдвоём";
+  $("#tg-btn").disabled = !canWrite();
+  $("#tg-list").innerHTML = tg.dates.slice(-6).reverse().map(k => `<li><span class="d">${fmtShort.format(parse(k))}</span>
+    <span class="n">${esc(T2[k]?.note || "")}</span><button type="button" class="xbtn" data-tgdel="${k}" aria-label="Удалить запись">×</button></li>`).join("");
+}
+
+/* ---------- стратегические цели ---------- */
+const goalsActive = () => (S.data?.goals || []).filter(g => !g.archived)
+  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.deadline < b.deadline ? -1 : 1));
+const gCur = g => g.history?.length ? g.history[g.history.length - 1].v : Number(g.start) || 0;
+function gFrac(g) {
+  if (g.kind === "steps") { const s = g.steps || []; return s.length ? s.filter(x => x.done).length / s.length : 0; }
+  const span = Number(g.target) - (Number(g.start) || 0);
+  return span ? (gCur(g) - (Number(g.start) || 0)) / span : 0;
+}
+function gTime(g) {
+  const s = parse(g.startDate || g.created || ymd(todayDate())), e = parse(g.deadline), t = todayDate();
+  const total = Math.max(1, Math.round((e - s) / 864e5)), elapsed = Math.max(0, Math.round((t - s) / 864e5));
+  return { s, e, total, elapsed, left: Math.round((e - t) / 864e5), expected: Math.max(0, Math.min(1, elapsed / total)) };
+}
+function gStatus(g) {
+  const f = gFrac(g), tm = gTime(g);
+  if (f >= 1) return { cls: "done", text: "достигнута" };
+  if (tm.left < 0) return { cls: "warn", text: "срок прошёл" };
+  if (tm.elapsed < 7 && f <= 0) return { cls: "", text: "старт" };
+  const d = f - tm.expected;
+  if (d >= .1) return { cls: "ok", text: "опережает" };
+  if (d >= 0) return { cls: "ok", text: "в графике" };
+  if (d >= -.05) return { cls: "", text: "чуть позади" };
+  return { cls: "warn", text: "отстаёт" };
+}
+// Когда цель будет достигнута при среднем темпе с начала
+function gEta(g) {
+  const f = gFrac(g), tm = gTime(g);
+  if (f >= 1 || f <= 0 || tm.elapsed < 7) return null;
+  return addDays(todayDate(), Math.ceil((1 - f) / (f / tm.elapsed)));
+}
+function goalCard(g) {
+  const st = gStatus(g), tm = gTime(g), f = gFrac(g), eta = gEta(g), unit = g.unit ? " " + esc(g.unit) : "";
+  const bar = `<div class="g-bar" data-tip="${esc(`Сделано ${pct(f)} · по плану на сегодня ${pct(tm.expected)}`)}"><i style="width:${Math.max(0, Math.min(1, f)) * 100}%"></i><em style="left:${tm.expected * 100}%"></em></div>`;
+  const etaTxt = !eta ? "" : eta <= tm.e ? ` При текущем темпе — к ${fmtDate(eta)}, раньше срока.` : ` При текущем темпе — только к ${fmtDate(eta)}.`;
+  let body;
+  if (g.kind === "steps") {
+    const s = g.steps || [], done = s.filter(x => x.done).length;
+    const pace = st.cls === "done" ? "Все этапы пройдены." : `По плану сейчас должно быть ${Math.round(tm.expected * s.length)} из ${s.length}.${etaTxt}`;
+    body = `<p class="g-val"><b>${done}</b> из ${s.length} ${plural(s.length, "этапа", "этапов", "этапов")} · ${pct(f)}</p>${bar}<p class="g-pace">${esc(pace)}</p>
+      <ul class="g-steps">${s.map(x => `<li class="${x.done ? "done" : ""}"><input type="checkbox" data-gstep="${esc(x.id)}" ${x.done ? "checked" : ""} aria-label="${esc(x.t)}" ${canWrite() ? "" : "disabled"}>
+        <span>${esc(x.t)}</span><button type="button" class="xbtn" data-gstepdel="${esc(x.id)}" aria-label="Удалить этап">×</button></li>`).join("")}</ul>
+      <form class="g-upd" data-gaddstep><input class="field" type="text" placeholder="Новый этап" maxlength="80" aria-label="Новый этап"><button class="btn ghost sm" type="submit">Добавить</button></form>`;
+  } else {
+    const cur = gCur(g), start = Number(g.start) || 0, target = Number(g.target);
+    const planNow = start + tm.expected * (target - start);
+    let pace = "";
+    if (st.cls !== "done") {
+      pace = `По плану сейчас нужно ${smart(planNow)}${g.unit ? " " + g.unit : ""}.`;
+      if (tm.left > 0) {
+        const need = (target - cur) / Math.max(1, tm.left / 30.44);
+        pace += ` Чтобы успеть — ${need >= 0 ? "+" : "−"}${smart(Math.abs(need))}${g.unit ? " " + g.unit : ""} в месяц.`;
+      }
+      pace += etaTxt;
+    } else pace = "Цель достигнута.";
+    body = `<p class="g-val"><b>${fmtN.format(cur)}</b> из ${fmtN.format(target)}${unit} · ${pct(f)}</p>${bar}<p class="g-pace">${esc(pace)}</p>
+      <div class="g-spark" data-gspark></div>
+      <form class="g-upd" data-gupd><input class="field" type="number" step="any" inputmode="decimal" placeholder="Сколько" aria-label="Значение">
+        <button class="btn sm" type="submit" data-mode="add">Прибавить</button><button class="btn ghost sm" type="submit" data-mode="set">Новое значение</button></form>`;
+  }
+  const dl = `до ${fmtDate(tm.e)}` + (tm.left >= 0 ? ` · осталось ${tm.left} ${plural(tm.left, "день", "дня", "дней")}` : "");
+  const conf = S.confirmGoal === g.id;
+  const edit = `<details class="g-edit"><summary>Изменить</summary><form class="fgrid" data-gedit>
+    <label class="wide">Название <input class="field" name="title" value="${esc(g.title)}" maxlength="80"></label>
+    <label>Сфера <select class="field" name="sphere">${sphereOptions(g.sphere)}</select></label>
+    <label>Начало <input class="field" type="date" name="startDate" value="${esc(g.startDate || "")}"></label>
+    <label>Срок <input class="field" type="date" name="deadline" value="${esc(g.deadline)}"></label>
+    ${g.kind === "steps" ? "" : `<label>Было <input class="field" type="number" step="any" name="start" value="${esc(g.start ?? 0)}"></label>
+      <label>Цель <input class="field" type="number" step="any" name="target" value="${esc(g.target)}"></label>
+      <label>Единица <input class="field" name="unit" value="${esc(g.unit || "")}" maxlength="12"></label>`}
+    <button class="btn sm" type="submit">Сохранить</button>
+    <button class="btn ghost sm" type="button" data-garch>В архив</button>
+    ${conf ? `<button class="btn danger sm" type="button" data-gdelyes>Удалить навсегда</button><button class="btn ghost sm" type="button" data-gdelno>Отмена</button>`
+      : `<button class="btn ghost sm" type="button" data-gdel>Удалить</button>`}
+  </form></details>`;
+  return `<article class="goal" data-gid="${esc(g.id)}"><header><h3>${esc(g.title)}</h3><span class="chip ${st.cls}">${st.text}</span></header>
+    <p class="g-meta">${g.sphere ? esc(g.sphere) + " · " : ""}${dl}</p>${body}${edit}</article>`;
+}
+function goalSpark(el, g) {
+  const W = chartWidth(el), H = 86, pl = 2, pr = 2, pt = 6, pb = 16, tm = gTime(g), t = todayDate();
+  const x0 = tm.s, x1 = tm.e > t ? tm.e : t, span = Math.max(1, (x1 - x0) / 864e5);
+  const X = d => pl + ((d - x0) / 864e5) / span * (W - pl - pr);
+  const start = Number(g.start) || 0, target = Number(g.target);
+  const hist = (g.history || []).filter(h => parse(h.d) >= x0).map(h => ({ d: parse(h.d), v: h.v }));
+  const vals = [start, target, ...hist.map(h => h.v)], lo = Math.min(...vals), hi = Math.max(...vals);
+  const Y = v => pt + (1 - (v - lo) / ((hi - lo) || 1)) * (H - pt - pb);
+  const pts = [{ d: x0, v: start }, ...hist, { d: t, v: gCur(g) }];
+  let path = `M${X(pts[0].d)},${Y(pts[0].v)}`;
+  for (let i = 1; i < pts.length; i++) path += `H${X(pts[i].d)}V${Y(pts[i].v)}`;
+  const up = target >= start, base = Y(up ? lo : hi);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Динамика цели">`;
+  s += `<line x1="${pl}" x2="${W - pr}" y1="${base}" y2="${base}" class="base"/>`;
+  s += `<path d="${path}V${base}H${X(pts[0].d)}Z" class="area"/>`;
+  s += `<line x1="${X(x0)}" y1="${Y(start)}" x2="${X(tm.e)}" y2="${Y(target)}" class="plan-l"/>`;
+  s += `<path d="${path}" class="act"/><circle cx="${X(t)}" cy="${Y(gCur(g))}" r="4" class="gp"/>`;
+  s += `<text x="${pl}" y="${H - 3}" class="ax">${fmtDM.format(x0)}</text><text x="${W - pr}" y="${H - 3}" class="ax" text-anchor="end">срок ${fmtDM.format(tm.e)}</text>`;
+  el.innerHTML = s + "</svg>";
+}
+function renderGoals() {
+  if (!S.data) return;
+  const list = $("#goal-list");
+  if (list.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const open = new Set([...list.querySelectorAll("details[open]")].map(d => d.closest("[data-gid]")?.dataset.gid));
+  const gs = goalsActive(), ar = (S.data.goals || []).filter(g => g.archived);
+  list.innerHTML = gs.length ? gs.map(goalCard).join("")
+    : `<p class="empty">Пока нет целей. Добавь крупную цель на год или квартал: накопить сумму, выйти на новый уровень в работе, пройти курс. Числовая цель показывает темп и дату, к которой ты её достигнешь, а цель из этапов — сколько шагов пройдено.</p>`;
+  if (ar.length) list.insertAdjacentHTML("beforeend", `<p class="note">В архиве: ${ar.map(g => `${esc(g.title)} <button type="button" class="linkbtn" data-grestore="${esc(g.id)}">вернуть</button>`).join(", ")}</p>`);
+  list.querySelectorAll("[data-gid]").forEach(card => {
+    if (open.has(card.dataset.gid)) card.querySelector("details")?.setAttribute("open", "");
+    const sp = card.querySelector("[data-gspark]"), g = gs.find(x => x.id === card.dataset.gid);
+    if (sp && g) goalSpark(sp, g);
+  });
+  const ok = gs.filter(g => ["ok", "done"].includes(gStatus(g).cls)).length;
+  $("#goals-aside").textContent = gs.length ? `${gs.length} ${plural(gs.length, "цель", "цели", "целей")} · в графике ${ok} · риска — где нужно быть сегодня` : "";
+  if (!gs.length && !ar.length) $("#goal-add").open = true;
+  if (!$("#ga-sphere").options.length) $("#ga-sphere").innerHTML = sphereOptions("");
+}
+
+/* ---------- система ---------- */
+function weekKey(d) { const t = new Date(d); t.setDate(t.getDate() + 3 - dow(t)); return `${t.getFullYear()}-W${pad(isoWeek(d))}`; }
+function reviewStreak() {
+  const R = S.data.reviews;
+  let wk = monday(todayDate()), n = 0;
+  if (!R[weekKey(wk)]) wk = addDays(wk, -7);
+  while (R[weekKey(wk)] && n < 520) { n++; wk = addDays(wk, -7); }
+  return n;
+}
+function renderSystem() {
+  if (!S.data) return;
+  const tk = ymd(todayDate()), items = T.data?.tasks || [], has = !!(tasksUrl() && T.data);
+  const open = items.filter(x => x.status !== "completed");
+  const overdue = open.filter(x => x.due && x.due < tk), undated = open.filter(x => !x.due);
+  const done7 = items.filter(x => x.status === "completed" && x.completed && Date.now() - Date.parse(x.completed) <= 7 * 864e5);
+  const stale = open.filter(x => x.updated && Date.now() - Date.parse(x.updated) > 30 * 864e5);
+  const tile = (v, l) => `<div><b>${has ? v : "—"}</b><span>${l}</span></div>`;
+  $("#sys-tiles").innerHTML = tile(open.length, "открыто") + tile(overdue.length, "просрочено") + tile(undated.length, "без даты") + tile(done7.length, "закрыто за 7 дней");
+  $("#sys-aside").textContent = has ? `Google Задачи · ${fmtTime.format(new Date(T.data.at))}` : "Google Задачи не подключены";
+  const R = S.data.reviews, cur = weekKey(todayDate()), reviewed = !!R[cur];
+  const li = (state, name, val, sub = "") => `<li class="${state}"><span class="dot"></span><span class="ck-name">${esc(name)}${sub ? `<span class="ck-sub">${esc(sub)}</span>` : ""}</span><span class="ck-val">${esc(val)}</span></li>`;
+  const checks = [];
+  if (has) {
+    checks.push(li(overdue.length <= 3 ? "ok" : "warn", "Просрочки под контролем", `${overdue.length} шт`,
+      overdue.length > 3 ? "Перенеси сроки или удали лишнее — больше трёх просрочек размывают план." : ""));
+    checks.push(li(stale.length ? "warn" : "ok", stale.length ? "Висит дольше месяца" : "Ничего не висит дольше месяца", `${stale.length} шт`,
+      stale.slice(0, 3).map(x => x.title).join(" · ")));
+    checks.push(li(done7.length ? "ok" : "warn", "Задачи закрываются", `${done7.length} за неделю`));
+  } else checks.push(`<li class="empty">Подключи Google Задачи в «Настройках дашборда», чтобы видеть гигиену задач.</li>`);
+  checks.push(li(reviewed ? "ok" : dow(todayDate()) >= 5 ? "warn" : "", reviewed ? "Обзор этой недели проведён" : "Обзор этой недели ещё впереди", reviewed ? fmtShort.format(parse(R[cur])) : ""));
+  $("#sys-checks").innerHTML = checks.join("");
+  let cells = "";
+  for (let i = 11; i >= 0; i--) {
+    const mon = addDays(monday(todayDate()), -7 * i), k = weekKey(mon), done = !!R[k];
+    cells += `<span class="${done ? "on" : ""} ${i === 0 ? "cur" : ""}" data-tip="${esc(`неделя ${isoWeek(mon)} · ${fmtDay.format(mon)} – ${fmtDay.format(addDays(mon, 6))} · ${done ? "обзор " + fmtShort.format(parse(R[k])) : "обзора не было"}`)}"></span>`;
+  }
+  $("#rv-weeks").innerHTML = cells;
+  const n = reviewStreak();
+  $("#rv-text").innerHTML = n ? `Серия: <b>${n}</b> ${plural(n, "неделя", "недели", "недель")} подряд.` : "Серии пока нет. Отметь первый обзор, когда проведёшь его.";
+  $("#rv-btn").textContent = reviewed ? "Отменить отметку обзора" : "Обзор этой недели проведён";
+  $("#rv-btn").className = reviewed ? "btn ghost" : "btn";
+  $("#rv-btn").disabled = !canWrite();
+}
+
+/* ---------- настройки дашборда ---------- */
+function renderSettingsPanel() {
+  if (!S.data) return;
+  const st = settings();
+  if (!$("#slot-list").contains(document.activeElement)) {
+    $("#slot-list").innerHTML = (st.slots || []).map((x, i) => `<li data-slot="${i}">
+      <select class="field" data-f="dow" aria-label="День">${DOW.map((d, j) => `<option value="${j}" ${j === x.dow ? "selected" : ""}>${d}</option>`).join("")}</select>
+      <input class="field" type="time" data-f="from" value="${esc(x.from)}" aria-label="С"> – <input class="field" type="time" data-f="to" value="${esc(x.to)}" aria-label="До">
+      <button type="button" class="xbtn" data-slotdel="${i}" aria-label="Удалить слот">×</button></li>`).join("") || '<li class="empty">Слотов пока нет.</li>';
+  }
+  if ($("#gt-url") !== document.activeElement && !$("#gt-url").value) $("#gt-url").value = st.tasksUrl || "";
+  $("#gt-state").textContent = !st.tasksUrl ? "Не подключено."
+    : T.loading ? "Подключено, загружаю задачи…"
+    : T.error ? tasksError()
+    : T.data ? `Подключено · ${T.data.tasks.filter(x => x.status !== "completed").length} открытых задач в ${T.data.lists.length} ${plural(T.data.lists.length, "списке", "списках", "списках")} · обновлено ${fmtTime.format(new Date(T.data.at))}`
+    : "Подключено.";
+}
+
 /* ---------- действия ---------- */
 document.addEventListener("click", e => {
   const tg = e.target.closest("[data-toggle]");
@@ -819,11 +1273,7 @@ document.addEventListener("click", e => {
     op({ t: "check", date: tg.dataset.date, hid: tg.dataset.hid, val: !isDone(tg.dataset.date, tg.dataset.hid) });
     return;
   }
-  if (e.target.closest("#kid-undo-btn") && S.kidUndo) {
-    const u = S.kidUndo; S.kidUndo = null;
-    op({ t: "kid", date: u.date, data: { [u.field]: u.prev } });
-    return;
-  }
+  if (e.target.closest("#toast-undo")) { const u = S.undo; hideToast(); if (u) u(); return; }
   const act = e.target.closest("button[data-act]");
   if (!act || act.disabled) return;
   const hid = act.closest("li")?.dataset.hid, a = act.dataset.act;
@@ -840,29 +1290,47 @@ document.addEventListener("click", e => {
     if (ops.length) op(...ops);
   }
 });
-function kidMark(field) {
+function kidMark(kind) {
   if (!canWrite()) { $("#connect-panel").open = true; return; }
-  if (field === "wake" && new Date().getHours() < 4) return;
-  const date = field === "wake" ? ymd(todayDate()) : bedDateNow(), now = nowHM();
-  const prev = S.data.kid[date]?.[field] ?? null;
-  S.kidUndo = { date, field, prev, text: `${kidName()} ${field === "wake" ? "проснулся" : "уснул"} в ${hm(toMin(now))}` };
-  op({ t: "kid", date, data: { [field]: now } });
+  const now = nowHM(), t = hm(toMin(now)), name = kidName(), hr = new Date().getHours(), tk = ymd(todayDate());
+  if (kind === "wake") {
+    if (hr < 4) return;
+    const prev = S.data.kid[tk]?.wake ?? null;
+    op({ t: "kid", date: tk, data: { wake: now } });
+    toast(`${name} проснулся в ${t}`, () => op({ t: "kid", date: tk, data: { wake: prev } }));
+  } else if (kind === "bed") {
+    const date = bedDateNow(), prev = S.data.kid[date]?.bed ?? null;
+    op({ t: "kid", date, data: { bed: now } });
+    toast(`${name} уснул в ${t}`, () => op({ t: "kid", date, data: { bed: prev } }));
+  } else if (kind === "night") {
+    const date = bedDateNow(), prev = S.data.kid[date]?.nights || [];
+    op({ t: "kid", date, data: { nights: [...prev, now] } });
+    toast(`${name} проснулся ночью в ${t}`, () => op({ t: "kid", date, data: { nights: prev.length ? prev : null } }));
+  } else if (kind === "me") {
+    const prev = S.data.me[tk]?.wake ?? null, rec = recFor(tk);
+    op({ t: "me", date: tk, data: { wake: now } });
+    toast(`Ты встал в ${t}${rec != null ? ` · ${diffText(toMin(now) - rec)}` : ""}`, () => op({ t: "me", date: tk, data: { wake: prev } }));
+  }
 }
 $("#kid-wake").addEventListener("click", () => kidMark("wake"));
 $("#kid-sleep").addEventListener("click", () => kidMark("bed"));
+$("#kid-night").addEventListener("click", () => kidMark("night"));
+$("#me-wake").addEventListener("click", () => kidMark("me"));
 $("#kf-date").addEventListener("change", e => { if (e.target.value) fillKidForm(e.target.value); });
 $("#kid-form").addEventListener("submit", e => {
   e.preventDefault();
   const k = $("#kf-date").value;
   if (!k || k > ymd(todayDate())) { notice("Выбери сегодняшний или прошедший день."); return; }
-  S.kidUndo = null;
-  if (op({ t: "kid", date: k, data: { wake: $("#kf-wake").value || null, bed: $("#kf-bed").value || null } })) notice("");
+  const raw = $("#kf-nights").value.trim(), nights = raw ? raw.split(/[,;\s]+/).filter(Boolean) : [];
+  if (nights.some(x => !/^\d{1,2}:\d{2}$/.test(x) || toMin(x) >= 1440)) { notice("Ночные пробуждения пиши временем через запятую, например 23:40, 2:10."); return; }
+  const norm = nights.map(x => { const m = toMin(x); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; });
+  if (op({ t: "kid", date: k, data: { wake: $("#kf-wake").value || null, bed: $("#kf-bed").value || null, nights: norm.length ? norm : null } },
+         { t: "me", date: k, data: { wake: $("#kf-me").value || null } })) notice("");
 });
 $("#kf-clear").addEventListener("click", () => {
   const k = $("#kf-date").value;
   if (!k) return;
-  S.kidUndo = null;
-  if (op({ t: "kid", date: k, data: { wake: null, bed: null } })) fillKidForm(k);
+  if (op({ t: "kid", date: k, data: { wake: null, bed: null, nights: null } }, { t: "me", date: k, data: { wake: null } })) fillKidForm(k);
 });
 const setSetting = data => op({ t: "settings", data });
 $("#ks-name").addEventListener("change", e => setSetting({ kidName: e.target.value.trim() }));
@@ -934,6 +1402,133 @@ $("#cf-forget-yes").addEventListener("click", () => {
   setSync("idle"); render();
 });
 
+/* ---------- новые блоки: действия ---------- */
+document.addEventListener("click", e => {
+  const tb = e.target.closest("[data-task]");
+  if (tb) { const task = T.data?.tasks.find(x => x.id === tb.dataset.task); if (task) taskSet(task, task.status !== "completed"); return; }
+  if (e.target.closest("#tasks-reload")) { loadTasks(true); return; }
+  const td = e.target.closest("[data-tgdel]");
+  if (td) {
+    const date = td.dataset.tgdel, prev = S.data.together[date] || {};
+    op({ t: "together", date, data: null });
+    toast(`Запись за ${fmtShort.format(parse(date))} удалена`, () => op({ t: "together", date, data: prev }));
+    return;
+  }
+  const card = e.target.closest("[data-gid]"), gid = card?.dataset.gid;
+  const g = gid && S.data.goals.find(x => x.id === gid);
+  if (e.target.closest("[data-grestore]")) { op({ t: "goal", id: e.target.closest("[data-grestore]").dataset.grestore, data: { archived: false } }); return; }
+  if (!g) return;
+  if (e.target.closest("[data-gstepdel]")) {
+    const sid = e.target.closest("[data-gstepdel]").dataset.gstepdel, prev = g.steps.find(x => x.id === sid);
+    op({ t: "goalStep", id: gid, sid, data: null });
+    toast(`Этап «${prev?.t}» удалён`, () => op({ t: "goalStep", id: gid, sid, data: { ...prev } }));
+  } else if (e.target.closest("[data-garch]")) {
+    op({ t: "goal", id: gid, data: { archived: true } });
+    toast(`Цель «${g.title}» в архиве`, () => op({ t: "goal", id: gid, data: { archived: false } }));
+  } else if (e.target.closest("[data-gdel]")) { S.confirmGoal = gid; renderGoals(); }
+  else if (e.target.closest("[data-gdelno]")) { S.confirmGoal = null; renderGoals(); }
+  else if (e.target.closest("[data-gdelyes]")) { S.confirmGoal = null; op({ t: "goalDel", id: gid }); }
+});
+$("#goal-list").addEventListener("change", e => {
+  const cb = e.target.closest("[data-gstep]"), gid = e.target.closest("[data-gid]")?.dataset.gid;
+  if (!cb || !gid) return;
+  cb.blur();
+  op({ t: "goalStep", id: gid, sid: cb.dataset.gstep, data: { done: cb.checked, doneAt: cb.checked ? ymd(todayDate()) : null } });
+});
+$("#goal-list").addEventListener("submit", e => {
+  e.preventDefault();
+  const form = e.target, gid = form.closest("[data-gid]")?.dataset.gid, g = S.data.goals.find(x => x.id === gid);
+  if (!g) return;
+  const tk = ymd(todayDate());
+  if (form.hasAttribute("data-gupd")) {
+    const v = Number(String(form.querySelector("input").value).replace(",", "."));
+    if (!form.querySelector("input").value || !Number.isFinite(v)) { notice("Введи число."); return; }
+    const mode = e.submitter?.dataset.mode || "add", cur = gCur(g), next = mode === "add" ? cur + v : v;
+    const prev = (g.history || []).find(x => x.d === tk);
+    document.activeElement?.blur?.();
+    op({ t: "goalLog", id: gid, d: tk, v: Math.round(next * 1000) / 1000 });
+    toast(`«${g.title}»: ${fmtN.format(next)}${g.unit ? " " + g.unit : ""}`, () => op({ t: "goalLog", id: gid, d: tk, v: prev ? prev.v : null }));
+  } else if (form.hasAttribute("data-gaddstep")) {
+    const text = form.querySelector("input").value.trim();
+    if (!text) return;
+    document.activeElement?.blur?.();
+    op({ t: "goalStep", id: gid, sid: "s" + Date.now().toString(36), data: { t: text } });
+  } else if (form.hasAttribute("data-gedit")) {
+    const f = new FormData(form), data = { title: String(f.get("title")).trim() || g.title, sphere: f.get("sphere"),
+      startDate: f.get("startDate") || g.startDate, deadline: f.get("deadline") || g.deadline };
+    if (g.kind !== "steps") {
+      data.start = Number(f.get("start")) || 0; data.target = Number(f.get("target")); data.unit = String(f.get("unit")).trim();
+      if (!Number.isFinite(data.target) || data.target === data.start) { notice("Цель должна отличаться от начального значения."); return; }
+    }
+    if (data.deadline <= data.startDate) { notice("Срок должен быть позже начала."); return; }
+    document.activeElement?.blur?.();
+    form.closest("details").open = false;
+    op({ t: "goal", id: gid, data });
+  }
+});
+$("#ga-kind").addEventListener("change", e => {
+  document.querySelectorAll("#ga-form [data-k]").forEach(l => { l.hidden = l.dataset.k !== e.target.value; });
+});
+$("#ga-form").addEventListener("submit", e => {
+  e.preventDefault();
+  if (!canWrite()) { $("#connect-panel").open = true; return; }
+  const tk = ymd(todayDate()), kind = $("#ga-kind").value, title = $("#ga-title").value.trim(), deadline = $("#ga-deadline").value;
+  if (!title) return;
+  if (!deadline || deadline <= tk) { notice("Срок цели должен быть в будущем."); return; }
+  const data = { title, kind, sphere: $("#ga-sphere").value, deadline, startDate: tk, created: tk, archived: false,
+    order: Math.max(-1, ...goalsActive().map(g => g.order ?? 0)) + 1 };
+  if (kind === "number") {
+    const start = Number($("#ga-start").value) || 0, target = Number($("#ga-target").value);
+    if (!$("#ga-target").value || !Number.isFinite(target) || target === start) { notice("Укажи цель — число, отличное от текущего."); return; }
+    Object.assign(data, { start, target, unit: $("#ga-unit").value.trim(), history: [] });
+  } else {
+    const lines = $("#ga-steps").value.split("\n").map(x => x.trim()).filter(Boolean);
+    if (!lines.length) { notice("Добавь хотя бы один этап."); return; }
+    const base = Date.now().toString(36);
+    data.steps = lines.map((t, i) => ({ id: `s${base}${i}`, t, done: false }));
+  }
+  notice("");
+  op({ t: "goal", id: "g" + Date.now().toString(36), data });
+  $("#ga-form").reset(); $("#ga-kind").dispatchEvent(new Event("change"));
+  $("#goal-add").open = false;
+});
+$("#tg-form").addEventListener("submit", e => {
+  e.preventDefault();
+  if (!canWrite()) { $("#connect-panel").open = true; return; }
+  const date = ymd(todayDate()), prev = S.data.together[date] || null, note = $("#tg-note").value.trim();
+  $("#tg-note").value = "";
+  op({ t: "together", date, data: { note: note || prev?.note || "" } });
+  toast(prev ? "Заметка обновлена" : "Записал: сегодня были вдвоём", () => op({ t: "together", date, data: prev }));
+});
+$("#tg-norm").addEventListener("change", e => setSetting({ togetherPerWeek: Number(e.target.value) }));
+$("#rv-btn").addEventListener("click", () => {
+  const week = weekKey(todayDate()), prev = S.data.reviews[week] || null;
+  op({ t: "review", week, date: prev ? null : ymd(todayDate()) });
+  toast(prev ? "Отметка обзора снята" : "Обзор недели отмечен", () => op({ t: "review", week, date: prev }));
+});
+function readSlots() {
+  return [...document.querySelectorAll("#slot-list li[data-slot]")].map(li => ({
+    dow: Number(li.querySelector('[data-f="dow"]').value), from: li.querySelector('[data-f="from"]').value, to: li.querySelector('[data-f="to"]').value,
+  })).filter(x => x.from && x.to);
+}
+$("#slot-list").addEventListener("change", () => setSetting({ slots: readSlots() }));
+$("#slot-list").addEventListener("click", e => {
+  const x = e.target.closest("[data-slotdel]");
+  if (!x) return;
+  const slots = (settings().slots || []).filter((_, i) => i !== Number(x.dataset.slotdel));
+  setSetting({ slots });
+});
+$("#slot-add").addEventListener("click", () => setSetting({ slots: [...(settings().slots || []), { dow: 2, from: "20:40", to: "22:10" }] }));
+$("#gt-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const url = $("#gt-url").value.trim(), key = $("#gt-key").value.trim() || settings().tasksKey;
+  if (url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) { notice("Нужен адрес вида https://script.google.com/macros/s/…/exec"); return; }
+  if (url && !key) { notice("Вставь ключ из журнала функции setup."); return; }
+  $("#gt-key").value = "";
+  T.data = null; lsSet(LS.tasks, null); T.error = null;
+  if (setSetting({ tasksUrl: url, tasksKey: url ? key : "" })) loadTasks(true);
+});
+
 /* ---------- подсказки ---------- */
 const tip = $("#tip");
 function showTip(el) {
@@ -954,15 +1549,15 @@ setInterval(() => {
   // Раз в минуту: смена дня и полдень (после 12:00 прогноз переключается на завтра)
   const now = new Date(), key = ymd(todayDate()) + (now.getHours() < 12 ? "am" : "pm");
   if (key !== lastKey) { lastKey = key; S.memo = null; render(); }
-  else if (S.data) renderKid();
+  else if (S.data) { renderKid(); renderPlan(); }
 }, 60000);
 let lastW = innerWidth;
 addEventListener("resize", () => {
   clearTimeout(S.rz);
-  S.rz = setTimeout(() => { if (Math.abs(innerWidth - lastW) > 20 && S.data) { lastW = innerWidth; renderKid(); renderProgress(); } }, 200);
+  S.rz = setTimeout(() => { if (Math.abs(innerWidth - lastW) > 20 && S.data) { lastW = innerWidth; renderKid(); renderGoals(); renderProgress(); } }, 200);
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && S.cfg) S.pending.length ? flush() : refresh();
+  if (document.visibilityState === "visible" && S.cfg) { S.pending.length ? flush() : refresh(); T.loadedAt = 0; }
 });
 addEventListener("online", () => { if (S.cfg) S.pending.length ? flush() : refresh(); });
 
