@@ -7,7 +7,7 @@ const LS = { cfg: "habits.cfg", base: "habits.base", pending: "habits.pending", 
 const DEFAULT_SETTINGS = {
   busyDays: [], busyLabel: "", spheres: ["работа","семья","здоровье","дом","деньги"],
   kidName: "", kidNameGen: "", morningMinutes: 30, morningHabit: "",
-  slots: [], tasksUrl: "", tasksKey: "", togetherPerWeek: 1,
+  slots: [], tasksUrl: "", tasksKey: "", togetherPerWeek: 1, work: null,
 };
 // Прогноз подъёма: окно истории, период полураспада веса и шаг календаря
 const K_WINDOW = 42, K_HALF = 10, SLOT = 15;
@@ -203,7 +203,7 @@ function setSync(state, err) {
   S.sync = state;
   if (state === "saved") S.savedAt = new Date();
   notice(err ? errorText(err) : "");
-  if (err && (err.status === 401 || err.status === 404 || err.status === 403)) $("#connect-panel").open = true;
+  if (err && (err.status === 401 || err.status === 404 || err.status === 403)) openConnect();
   renderSync();
 }
 async function refresh() {
@@ -252,7 +252,7 @@ async function flush() {
   S.again = false;
 }
 function op(...list) {
-  if (!canWrite()) { $("#connect-panel").open = true; return false; }
+  if (!canWrite()) { openConnect(); return false; }
   S.pending.push(...list); persist(); recompute();
   setSync("pending"); render(); schedule();
   return true;
@@ -505,21 +505,25 @@ function renderSync() {
   el.className = "sync " + cls; el.textContent = text;
 }
 function render() {
-  renderSync(); renderHeader(); renderConnect();
+  renderSync(); renderHeader(); renderConnect(); renderNav();
+  $("#connect-wrap").hidden = !(currentView() === "settings" || !S.cfg || !S.data);
   $("#main").hidden = !S.data;
   if (!S.data) return;
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
 }
 function renderHeader() {
-  const t = todayDate(), tk = ymd(t);
-  $("#today-title").textContent = fmtLong.format(t);
-  $("#period-line").textContent = `${MONTHS[t.getMonth()]} · ${Math.floor(t.getMonth() / 3) + 1}-й квартал · неделя ${isoWeek(t)}`;
+  const t = todayDate(), tk = ymd(t), v = currentView();
+  $("#today-title").textContent = v === "today" ? fmtLong.format(t) : VIEW_TITLES[v];
+  $("#period-line").textContent = v === "today"
+    ? `${MONTHS[t.getMonth()]} · ${Math.floor(t.getMonth() / 3) + 1}-й квартал · неделя ${isoWeek(t)}`
+    : fmtLong.format(t);
   const sum = $("#today-sum");
+  sum.hidden = v !== "today";
   if (!S.cfg && !S.data) { sum.textContent = "Подключи репозиторий с данными, чтобы увидеть дашборд."; return; }
   if (!S.data) { sum.textContent = "Загружаю данные с GitHub…"; return; }
   const hs = active();
-  if (!hs.length) { sum.textContent = "Привычек пока нет. Добавь первую в настройке ниже."; return; }
+  if (!hs.length) { sum.textContent = "Привычек пока нет. Добавь первую в настройках."; return; }
   const doneToday = hs.filter(h => isDone(tk, h.id)).length;
   const month = normStats(new Date(t.getFullYear(), t.getMonth(), 1), new Date(t.getFullYear(), t.getMonth() + 1, 0));
   sum.innerHTML = `Сегодня отмечено <b>${doneToday} из ${hs.length}</b> · норма месяца выполнена на <b>${pct(month.pct)}</b>`;
@@ -542,7 +546,6 @@ function renderToday() {
 
 function renderKid() {
   const st = settings(), name = kidName(), t = todayDate(), tk = ymd(t);
-  $("#kid-title").textContent = "Утро";
   const target = kidTarget(), isToday = target === tk, fc = forecast(target);
   $("#fc-when").textContent = `${name} проснётся · ${isToday ? "сегодня" : "завтра"}, ${fmtShort.format(parse(target))}`;
   const mh = habits().find(h => h.id === st.morningHabit), mins = st.morningMinutes || 30;
@@ -571,11 +574,12 @@ function renderKid() {
     $("#kid-aside").textContent = "";
   }
   // Кнопки
-  const hr = new Date().getHours(), night = hr < 4, nightOk = hr >= 17 || hr < 9, meOk = hr >= 3 && hr < 14;
+  const hr = new Date().getHours(), night = hr < 4, wakeOk = hr >= 4 && hr < 14, nightOk = hr >= 17 || hr < 9, meOk = hr >= 3 && hr < 14;
   const nowT = hm(toMin(nowHM()));
   const w = S.data.kid[tk]?.wake, bd = bedDateNow(), b = S.data.kid[bd]?.bed, nts = S.data.kid[bd]?.nights || [];
   $("#kid-wake-l").textContent = `${name} проснулся`;
   $("#kid-wake-s").textContent = night ? "сейчас ночь: утренний подъём отмечается с 4:00"
+    : !wakeOk ? (w ? `сегодня в ${hm(toMin(w))}` : "отмечается утром")
     : w ? `сегодня в ${hm(toMin(w))} · нажми, чтобы заменить на ${nowT}` : `запишу ${nowT}`;
   $("#kid-sleep-l").textContent = `${name} уснул`;
   $("#kid-sleep-s").textContent = b ? `${bd === tk ? "сегодня" : "вчера"} в ${hm(toMin(b))} · нажми, чтобы заменить` : `запишу ${nowT} как отбой`;
@@ -585,7 +589,7 @@ function renderKid() {
   const mw = S.data.me[tk]?.wake, rec = recFor(tk);
   $("#me-wake-s").textContent = mw ? `сегодня в ${hm(toMin(mw))}${rec != null ? ` · ${diffText(toMin(mw) - rec)}` : ""}`
     : !meOk ? "отмечается утром" : rec != null ? `план ${hm(rec)} · запишу ${nowT}` : `запишу ${nowT}`;
-  $("#kid-wake").disabled = !canWrite() || night;
+  $("#kid-wake").disabled = !canWrite() || !wakeOk;
   $("#kid-sleep").disabled = !canWrite();
   $("#kid-night").disabled = !canWrite() || !nightOk;
   $("#me-wake").disabled = !canWrite() || !meOk;
@@ -819,7 +823,7 @@ function monthGrid(first, mini) {
 function renderProgress() {
   const view = S.view, off = view === "month" ? S.monthOffset : S.quarterOffset;
   const P = periodFor(view, off), prev = periodFor(view, off - 1);
-  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === view)));
+  document.querySelectorAll("#progress .seg button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === view)));
   $("#per-label").innerHTML = esc(P.label) + (P.sub ? `<small>${esc(P.sub)}</small>` : "");
   $("#per-next").disabled = off >= 0;
   $("#per-now").disabled = off === 0;
@@ -1001,58 +1005,103 @@ function nextSlot(d) {
   for (let i = 1; i <= 7; i++) { const x = addDays(d, i), sl = slotsOn(x); if (sl.length) return { date: x, ...sl[0] }; }
   return null;
 }
+const dayOffset = () => S.dayOff ?? (new Date().getHours() >= 19 ? 1 : 0);
+const hz = x => String(x).replace(/^0(\d)/, "$1");
 function renderPlan() {
   if (!S.data) return;
-  const t = planTarget(), tk = ymd(t), isToday = tk === ymd(todayDate()), st = settings(), name = kidName();
-  const row = (icon, b, span, cls = "") => `<div class="prow ${cls}">${icon}<div><b>${esc(b)}</b>${span ? `<span>${esc(span)}</span>` : ""}</div></div>`;
-  $("#plan-title").textContent = `План на ${isToday ? "сегодня" : "завтра"}`;
-  $("#plan-date").textContent = fmtLong.format(t);
-  const rows = [];
-  const kw = wakeOf(tk), f = forecast(tk);
-  if (kw != null) rows.push(row(ICON.sun, `${name} проснулся в ${hm(kw)}`, ""));
-  else if (f) rows.push(row(ICON.sun, `${name} проснётся около ${hm(f.pred)}`, `скорее всего между ${hm(f.lo)} и ${hm(f.hi)}`));
-  else rows.push(row(ICON.sun, `Прогноз подъёма ${kidGen()} пока не готов`, "нужно ещё несколько отмеченных утр"));
-  const mw = S.data.me[tk]?.wake, rec = recFor(tk), mh = habits().find(h => h.id === st.morningHabit);
-  if (mw) rows.push(row(ICON.me, `Ты встал в ${hm(toMin(mw))}`, rec != null ? diffText(toMin(mw) - rec) : ""));
-  else if (rec != null) rows.push(row(ICON.me, `Тебе вставать в ${hm(rec)}`, `${st.morningMinutes || 30} мин на ${mh ? `«${mh.name}»` : "утреннее время"}`));
-  const sl = slotsOn(t), busy = new Set(st.busyDays || []);
-  if (sl.length) rows.push(row(ICON.clock, `Свободный слот ${sl.map(x => `${x.from}–${x.to}`).join(", ")}`, "время на свои дела"));
-  else {
-    const nx = nextSlot(t);
-    rows.push(row(ICON.clock, busy.has(dow(t)) && st.busyLabel ? `Вечер: ${st.busyLabel}` : "Свободного слота нет",
-      nx ? `ближайший — ${fmtShort.format(nx.date)}, ${nx.from}–${nx.to}` : (st.slots || []).length ? "" : "слоты задаются в «Настройках дашборда»"));
+  const off = dayOffset(), d = addDays(todayDate(), off), k = ymd(d), isToday = off === 0, st = settings(), name = kidName();
+  document.querySelectorAll("#day .seg button").forEach(b => b.setAttribute("aria-selected", String(Number(b.dataset.day) === off)));
+  $("#day-title").textContent = isToday ? "День" : "Завтра";
+  const ev = [], add = (t, time, cls, b, sub = "") => ev.push({ t, time, cls, b, sub });
+  const mw = meWakeOf(k), rec = recFor(k), mh = habits().find(h => h.id === st.morningHabit), mins = st.morningMinutes || 30;
+  if (mw != null) add(mw, hm(mw), "me done", "Ты встал", rec != null ? diffText(mw - rec) : "");
+  else if (rec != null) add(rec, hm(rec), "me", "Ты встаёшь", `${mins} мин на ${mh ? `«${mh.name}»` : "утреннее время"}`);
+  const kw = wakeOf(k), f = forecast(k);
+  if (kw != null) add(kw, hm(kw), "kid done", `${name} проснулся`, f ? `прогноз был ${hm(f.pred)}` : "");
+  else if (f) add(f.lo, `${hm(f.lo)}–${hm(f.hi)}`, "kid band", `${name} проснётся ≈ ${hm(f.pred)}`, "прогноз по прошлым утрам");
+  const w = st.work;
+  if (w && w.from && w.to && (w.days || []).includes(dow(d))) add(toMin(w.from), `${hz(w.from)}–${hz(w.to)}`, "work", "Работа");
+  if ((st.busyDays || []).includes(dow(d)) && st.busyLabel) add(18 * 60 + 30, "вечер", "busy", st.busyLabel[0].toUpperCase() + st.busyLabel.slice(1));
+  const bedDay = bedOf(k), beds = recentKid(30).beds;
+  if (bedDay != null) add(bedDay, hm(bedDay), "kid done", `${name} уснул`);
+  else if (beds.length >= 3) {
+    const one = beds.map(() => 1);
+    add(median(beds), `≈ ${hm(median(beds))}`, "kid", `Отбой ${kidGen()}`, `обычно ${hm(wq(beds, one, .25))}–${hm(wq(beds, one, .75))}`);
   }
-  const tg = togetherInfo();
-  if (tg.overdue) rows.push(row(ICON.heart, `Вдвоём не были ${tg.days} ${plural(tg.days, "день", "дня", "дней")}`, `норма — ${tg.normText}`, "warn"));
-  $("#plan-rows").innerHTML = rows.join("");
+  slotsOn(d).forEach(x => add(toMin(x.from), `${hz(x.from)}–${hz(x.to)}`, "slot", "Свободный слот", "время на свои дела"));
+  if (isToday) { const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); ev.push({ t: m + .5, now: true, time: hm(m) }); }
+  ev.sort((x, y) => x.t - y.t);
+  $("#day-tl").innerHTML = ev.filter(e => !e.now).length
+    ? ev.map(e => e.now ? `<li class="now"><time>${e.time}</time><span>сейчас</span></li>`
+      : `<li class="${e.cls}"><time>${esc(e.time)}</time><div><b>${esc(e.b)}</b>${e.sub ? `<span>${esc(e.sub)}</span>` : ""}</div></li>`).join("")
+    : `<li class="empty">Лента заполнится, когда появятся прогноз подъёма, рабочие часы или слоты — они задаются в настройках.</li>`;
 
+  const hs = active(), tk0 = ymd(todayDate());
+  $("#hab-count").textContent = hs.length ? `${hs.filter(h => isDone(tk0, h.id)).length} из ${hs.length}` : "";
+  const tg = togetherInfo(), duo = $("#duo-mini"), todayTg = S.data.together[tk0];
+  duo.innerHTML = todayTg
+    ? `<b>0</b><span>дней — сегодня были вдвоём${todayTg.note ? `: ${esc(todayTg.note)}` : ""}</span>`
+    : tg.days == null
+      ? `<span>Отмечай время вдвоём — здесь будет видно, сколько дней прошло с последнего.</span><button type="button" class="btn" id="duo-btn">Были вдвоём</button>`
+      : `<b>${tg.days}</b><span>${plural(tg.days, "день", "дня", "дней")} с последнего времени вдвоём · норма ${tg.normText}</span><button type="button" class="btn" id="duo-btn">Были вдвоём</button>`;
+
+  $("#tasks-title").textContent = isToday ? "Задачи" : "Задачи на завтра";
   const ul = $("#plan-tasks"), foot = $("#plan-foot");
   if (!tasksUrl()) {
-    ul.innerHTML = `<li class="empty">Подключи Google Задачи в «Настройках дашборда» — здесь появятся задачи с датой на ${isToday ? "сегодня" : "завтра"}.</li>`;
+    ul.innerHTML = `<li class="empty">Подключи Google Задачи в настройках — здесь появятся задачи с датой.</li>`;
     foot.textContent = ""; return;
   }
   if (!T.data) {
     ul.innerHTML = `<li class="empty">${T.loading ? "Загружаю задачи…" : esc(tasksError() || "Задачи ещё не загружены.")}</li>`;
     foot.textContent = ""; return;
   }
-  const today = ymd(todayDate());
   const open = T.data.tasks.filter(x => x.status !== "completed" || x.touched);
   const byDue = (a, b) => (a.due || "") < (b.due || "") ? -1 : 1;
   const groups = [
-    ["Просрочено", open.filter(x => x.due && x.due < today).sort(byDue), "warn"],
-    ["Осталось на сегодня", isToday ? [] : open.filter(x => x.due === today), ""],
-    [isToday ? "На сегодня" : "На завтра", open.filter(x => x.due === tk), ""],
+    ["Просрочено", open.filter(x => x.due && x.due < tk0).sort(byDue), "warn"],
+    ["Осталось на сегодня", isToday ? [] : open.filter(x => x.due === tk0), ""],
+    [isToday ? "На сегодня" : "На завтра", open.filter(x => x.due === k), ""],
   ].filter(g => g[1].length);
   const li = x => `<li class="pt ${x.status === "completed" ? "done" : ""}"><button type="button" data-task="${esc(x.id)}" aria-label="${x.status === "completed" ? "Вернуть задачу" : "Отметить выполненной"}: ${esc(x.title)}">${CHECK}</button>
-    <span class="pt-t">${esc(x.title)}<small>${esc(x.list)}${x.due && x.due < today ? ` · срок ${fmtDM.format(parse(x.due))}` : ""}</small></span></li>`;
+    <span class="pt-t">${esc(x.title)}<small>${esc(x.list)}${x.due && x.due < tk0 ? ` · срок ${fmtDM.format(parse(x.due))}` : ""}</small></span></li>`;
   const undated = open.filter(x => !x.due && x.status !== "completed").length;
   ul.innerHTML = groups.length
     ? groups.map(([title, list, cls]) => `<li class="grp ${cls}">${title} · ${list.length}</li>` + list.slice(0, 8).map(li).join("")
       + (list.length > 8 ? `<li class="empty">и ещё ${list.length - 8}</li>` : "")).join("")
     : `<li class="empty">На ${isToday ? "сегодня" : "завтра"} задач с датой нет.${undated ? ` Без даты: ${undated}.` : ""}</li>`;
-  foot.innerHTML = `Google Задачи · ${T.loading ? "обновляю…" : `обновлено ${fmtTime.format(new Date(T.data.at))}`} · <button type="button" class="linkbtn" id="tasks-reload">Обновить</button>`
+  foot.innerHTML = `${T.loading ? "обновляю…" : `обновлено ${fmtTime.format(new Date(T.data.at))}`} · <button type="button" class="linkbtn" id="tasks-reload">Обновить</button>`
     + (T.error ? ` · <span class="warn-t">${esc(tasksError())}</span>` : "");
 }
+
+/* ---------- вкладки ---------- */
+const ICONS = {
+  today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>',
+  morning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="14" r="4"/><path d="M12 4v3M5 8l2 2M19 8l-2 2M3 19h18"/></svg>',
+  goals: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
+  results: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19V11M10 19V6M15 19v-9M20 19v-5"/></svg>',
+};
+const VIEWS = [["today", "Сегодня"], ["morning", "Утро"], ["goals", "Цели"], ["results", "Итоги"]];
+const VIEW_TITLES = { morning: "Утро", goals: "Цели", results: "Итоги", settings: "Настройки" };
+function currentView() {
+  const v = location.hash.slice(1);
+  return v === "settings" || VIEWS.some(x => x[0] === v) ? v : "today";
+}
+function renderNav() {
+  const v = currentView();
+  const html = VIEWS.map(([id, title]) => `<a href="#${id}"${id === v ? ' aria-current="page"' : ""}>${ICONS[id]}<span>${title}</span></a>`).join("");
+  document.querySelectorAll("[data-nav]").forEach(n => { n.innerHTML = html; });
+  $(".gear").classList.toggle("on", v === "settings");
+}
+function route() {
+  const v = currentView();
+  document.querySelectorAll(".view[data-view]").forEach(el => { el.hidden = el.dataset.view !== v; });
+  render();
+}
+function openConnect() {
+  $("#connect-panel").open = true;
+  if (currentView() !== "settings") location.hash = "#settings";
+}
+addEventListener("hashchange", () => { route(); scrollTo(0, 0); });
 
 /* ---------- время вдвоём ---------- */
 function togetherInfo() {
@@ -1262,6 +1311,11 @@ function renderSettingsPanel() {
       <button type="button" class="xbtn" data-slotdel="${i}" aria-label="Удалить слот">×</button></li>`).join("") || '<li class="empty">Слотов пока нет.</li>';
   }
   if ($("#gt-url") !== document.activeElement && !$("#gt-url").value) $("#gt-url").value = st.tasksUrl || "";
+  if (!$("#work-form").contains(document.activeElement)) {
+    const w = st.work || { from: "", to: "", days: [] };
+    $("#wk-from").value = w.from || ""; $("#wk-to").value = w.to || "";
+    $("#wk-days").innerHTML = DOW.map((d, i) => `<label><input type="checkbox" value="${i}" ${(w.days || []).includes(i) ? "checked" : ""}>${d}</label>`).join("");
+  }
   $("#gt-state").textContent = !st.tasksUrl ? "Не подключено."
     : T.loading ? "Подключено, загружаю задачи…"
     : T.error ? tasksError()
@@ -1294,10 +1348,10 @@ document.addEventListener("click", e => {
   }
 });
 function kidMark(kind) {
-  if (!canWrite()) { $("#connect-panel").open = true; return; }
+  if (!canWrite()) { openConnect(); return; }
   const now = nowHM(), t = hm(toMin(now)), name = kidName(), hr = new Date().getHours(), tk = ymd(todayDate());
   if (kind === "wake") {
-    if (hr < 4) return;
+    if (hr < 4 || hr >= 14) return;
     const prev = S.data.kid[tk]?.wake ?? null;
     op({ t: "kid", date: tk, data: { wake: now } });
     toast(`${name} проснулся в ${t}`, () => op({ t: "kid", date: tk, data: { wake: prev } }));
@@ -1368,7 +1422,7 @@ $("#add-form").addEventListener("submit", e => {
 $("#prev").addEventListener("click", () => { S.weekOffset--; renderWeek(); });
 $("#next").addEventListener("click", () => { if (S.weekOffset < 0) { S.weekOffset++; renderWeek(); } });
 $("#now").addEventListener("click", () => { S.weekOffset = 0; renderWeek(); });
-document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+document.querySelectorAll("#progress .seg button").forEach(b => b.addEventListener("click", () => {
   S.view = b.dataset.view; lsSet(LS.view, S.view); renderProgress();
 }));
 const shiftPeriod = dlt => {
@@ -1378,7 +1432,7 @@ const shiftPeriod = dlt => {
 $("#per-prev").addEventListener("click", () => shiftPeriod(-1));
 $("#per-next").addEventListener("click", () => shiftPeriod(1));
 $("#per-now").addEventListener("click", () => { if (S.view === "month") S.monthOffset = 0; else S.quarterOffset = 0; renderProgress(); });
-$("#sync").addEventListener("click", () => { if (!S.cfg) { $("#connect-panel").open = true; return; } S.pending.length ? flush() : refresh(); });
+$("#sync").addEventListener("click", () => { if (!S.cfg) { openConnect(); return; } S.pending.length ? flush() : refresh(); });
 
 $("#connect-form").addEventListener("submit", e => {
   e.preventDefault();
@@ -1474,7 +1528,7 @@ $("#ga-kind").addEventListener("change", e => {
 });
 $("#ga-form").addEventListener("submit", e => {
   e.preventDefault();
-  if (!canWrite()) { $("#connect-panel").open = true; return; }
+  if (!canWrite()) { openConnect(); return; }
   const tk = ymd(todayDate()), kind = $("#ga-kind").value, title = $("#ga-title").value.trim(), deadline = $("#ga-deadline").value;
   if (!title) return;
   if (!deadline || deadline <= tk) { notice("Срок цели должен быть в будущем."); return; }
@@ -1495,14 +1549,24 @@ $("#ga-form").addEventListener("submit", e => {
   $("#ga-form").reset(); $("#ga-kind").dispatchEvent(new Event("change"));
   $("#goal-add").open = false;
 });
-$("#tg-form").addEventListener("submit", e => {
-  e.preventDefault();
-  if (!canWrite()) { $("#connect-panel").open = true; return; }
-  const date = ymd(todayDate()), prev = S.data.together[date] || null, note = $("#tg-note").value.trim();
-  $("#tg-note").value = "";
+function markTogether(note) {
+  if (!canWrite()) { openConnect(); return; }
+  const date = ymd(todayDate()), prev = S.data.together[date] || null;
   op({ t: "together", date, data: { note: note || prev?.note || "" } });
   toast(prev ? "Заметка обновлена" : "Записал: сегодня были вдвоём", () => op({ t: "together", date, data: prev }));
+}
+$("#tg-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const note = $("#tg-note").value.trim();
+  $("#tg-note").value = "";
+  markTogether(note);
 });
+$("#duo-mini").addEventListener("click", e => { if (e.target.closest("#duo-btn")) markTogether(""); });
+document.querySelectorAll("#day .seg button").forEach(b => b.addEventListener("click", () => { S.dayOff = Number(b.dataset.day); renderPlan(); }));
+$("#work-form").addEventListener("change", () => setSetting({ work: {
+  from: $("#wk-from").value, to: $("#wk-to").value,
+  days: [...document.querySelectorAll("#wk-days input:checked")].map(x => Number(x.value)),
+} }));
 $("#tg-norm").addEventListener("change", e => setSetting({ togetherPerWeek: Number(e.target.value) }));
 $("#rv-btn").addEventListener("click", () => {
   const week = weekKey(todayDate()), prev = S.data.reviews[week] || null;
@@ -1572,6 +1636,6 @@ recompute();
 if (!S.cfg) $("#connect-panel").open = true;
 if (S.cfg && S.pending.length) setSync("pending");
 lastKey = ymd(todayDate()) + (new Date().getHours() < 12 ? "am" : "pm");
-render();
+route();
 if (S.cfg) S.pending.length ? flush() : refresh();
 })();
