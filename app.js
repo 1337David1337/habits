@@ -178,10 +178,12 @@ function commitMsg(ops) {
   const parts = [];
   if (on.length || off.length) parts.push(`Отметки ${days.join(", ")}: ${[on.length && "+" + on.length, off.length && "−" + off.length].filter(Boolean).join(" ")}`);
   const F = { wake: "подъём", bed: "отбой", nights: "ночью" };
-  const kid = ops.filter(o => o.t === "kid").flatMap(o => Object.entries(o.data).map(([f, v]) =>
+  const kidOps = ops.filter(o => o.t === "kid"), kidSet = kidOps.flatMap(o => Object.entries(o.data).filter(([, v]) => v != null && v !== ""));
+  const kid = kidOps.flatMap(o => Object.entries(o.data).filter(([, v]) => !kidSet.length || (v != null && v !== "")).map(([f, v]) =>
     `${F[f] || f} ${fmtDM.format(parse(o.date))} ${Array.isArray(v) ? v.join(", ") : v || "удалён"}`));
   if (kid.length) parts.push(`${kidName()}: ${kid.join(", ")}`);
-  const me = ops.filter(o => o.t === "me").map(o => `${fmtDM.format(parse(o.date))} ${o.data.wake || "удалён"}`);
+  const meOps = ops.filter(o => o.t === "me"), meSet = meOps.some(o => o.data.wake);
+  const me = meOps.filter(o => !meSet || o.data.wake).filter(o => o.data.wake || !kidSet.length).map(o => `${fmtDM.format(parse(o.date))} ${o.data.wake || "удалён"}`);
   if (me.length) parts.push(`Мой подъём: ${me.join(", ")}`);
   if (ops.some(o => o.t === "together")) parts.push("время вдвоём");
   if (ops.some(o => o.t === "review")) parts.push("обзор недели");
@@ -757,14 +759,18 @@ function renderKidSettings() {
   if ($("#ks-min") !== focus) $("#ks-min").innerHTML = [10, 15, 20, 30, 45, 60, 90].map(n => `<option value="${n}" ${n === (st.morningMinutes || 30) ? "selected" : ""}>${n} мин</option>`).join("");
   if ($("#ks-habit") !== focus) $("#ks-habit").innerHTML = `<option value="">не выбрана</option>` +
     active().map(h => `<option value="${esc(h.id)}" ${h.id === st.morningHabit ? "selected" : ""}>${esc(h.name)}</option>`).join("");
-  if (!$("#kf-date").value) fillKidForm(ymd(todayDate()));
+  if (!$("#kf-date").value) fillKidForm(bedDateNow());
 }
+// Форма описывает одну ночь: отбой и пробуждения — в день k, подъёмы — утром следующего дня
 function fillKidForm(k) {
-  const v = S.data?.kid[k] || {};
+  const v = S.data?.kid[k] || {}, next = ymd(addDays(parse(k), 1));
   $("#kf-date").value = k; $("#kf-date").max = ymd(todayDate());
-  $("#kf-wake").value = v.wake || ""; $("#kf-bed").value = v.bed || "";
+  $("#kf-hint").textContent = `с ${fmtShort.format(parse(k))} на ${fmtShort.format(parse(next))}`;
+  $("#kf-bed").value = v.bed || "";
   $("#kf-nights").value = (v.nights || []).map(x => hm(toMin(x))).join(", ");
-  $("#kf-me").value = S.data?.me[k]?.wake || "";
+  $("#kf-wake").value = S.data?.kid[next]?.wake || "";
+  $("#kf-me").value = S.data?.me[next]?.wake || "";
+  $("#kf-wake").disabled = $("#kf-me").disabled = next > ymd(todayDate());
 }
 
 function renderWeek() {
@@ -1381,13 +1387,15 @@ $("#kid-form").addEventListener("submit", e => {
   const raw = $("#kf-nights").value.trim(), nights = raw ? raw.split(/[,;\s]+/).filter(Boolean) : [];
   if (nights.some(x => !/^\d{1,2}:\d{2}$/.test(x) || toMin(x) >= 1440)) { notice("Ночные пробуждения пиши временем через запятую, например 23:40, 2:10."); return; }
   const norm = nights.map(x => { const m = toMin(x); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; });
-  if (op({ t: "kid", date: k, data: { wake: $("#kf-wake").value || null, bed: $("#kf-bed").value || null, nights: norm.length ? norm : null } },
-         { t: "me", date: k, data: { wake: $("#kf-me").value || null } })) notice("");
+  const next = ymd(addDays(parse(k), 1)), ops = [{ t: "kid", date: k, data: { bed: $("#kf-bed").value || null, nights: norm.length ? norm : null } }];
+  if (next <= ymd(todayDate())) ops.push({ t: "kid", date: next, data: { wake: $("#kf-wake").value || null } }, { t: "me", date: next, data: { wake: $("#kf-me").value || null } });
+  if (op(...ops)) { notice(""); toast(`Записал ночь с ${fmtShort.format(parse(k))} на ${fmtShort.format(parse(next))}`); }
 });
 $("#kf-clear").addEventListener("click", () => {
   const k = $("#kf-date").value;
   if (!k) return;
-  if (op({ t: "kid", date: k, data: { wake: null, bed: null, nights: null } }, { t: "me", date: k, data: { wake: null } })) fillKidForm(k);
+  const next = ymd(addDays(parse(k), 1));
+  if (op({ t: "kid", date: k, data: { bed: null, nights: null } }, { t: "kid", date: next, data: { wake: null } }, { t: "me", date: next, data: { wake: null } })) fillKidForm(k);
 });
 const setSetting = data => op({ t: "settings", data });
 $("#ks-name").addEventListener("change", e => setSetting({ kidName: e.target.value.trim() }));

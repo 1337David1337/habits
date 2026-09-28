@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -143,15 +143,16 @@
         <details class="sub" id="kid-edit">
           <summary>Внести вручную и настройки</summary>
           <form class="fgrid" id="kid-form">
-            <label for="kf-date">День <input class="field" type="date" id="kf-date"></label>
-            <label for="kf-wake">Проснулся утром <input class="field" type="time" id="kf-wake"></label>
+            <label for="kf-date">Ночь с <input class="field" type="date" id="kf-date"></label>
+            <p class="kf-hint" id="kf-hint"></p>
             <label for="kf-bed">Уснул вечером <input class="field" type="time" id="kf-bed"></label>
             <label for="kf-nights">Ночью просыпался <input class="field" type="text" id="kf-nights" placeholder="23:40, 2:10" inputmode="numeric"></label>
-            <label for="kf-me">Я встал <input class="field" type="time" id="kf-me"></label>
+            <label for="kf-wake">Проснулся утром <input class="field" type="time" id="kf-wake"></label>
+            <label for="kf-me">Я встал утром <input class="field" type="time" id="kf-me"></label>
             <button class="btn" type="submit" id="kf-save">Сохранить</button>
-            <button class="btn ghost" type="button" id="kf-clear">Очистить день</button>
+            <button class="btn ghost" type="button" id="kf-clear">Очистить ночь</button>
           </form>
-          <p class="note">«Уснул вечером» и «Ночью просыпался» относятся к ночи, которая начинается в этот день. Они влияют на прогноз подъёма следующим утром.</p>
+          <p class="note">Всё в форме относится к одной ночи: отбой — вечером выбранного дня, подъёмы — утром следующего. До полудня здесь открыта прошлая ночь.</p>
           <div class="fgrid">
             <label for="ks-name">Имя <input class="field" type="text" id="ks-name" maxlength="30" placeholder="Марк"></label>
             <label for="ks-gen">Утро кого? <input class="field" type="text" id="ks-gen" maxlength="30" placeholder="Марка"></label>
@@ -372,6 +373,6 @@
 <nav class="tabbar" aria-label="Разделы" data-nav></nav>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
