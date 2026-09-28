@@ -519,10 +519,13 @@ function renderKid() {
   // Кнопки
   const w = S.data.kid[tk]?.wake, bd = bedDateNow(), b = S.data.kid[bd]?.bed;
   $("#kid-wake-l").textContent = `${name} проснулся`;
-  $("#kid-wake-s").textContent = w ? `сегодня в ${hm(toMin(w))} · нажми, чтобы заменить на ${hm(toMin(nowHM()))}` : `запишу ${hm(toMin(nowHM()))}`;
+  const night = new Date().getHours() < 4;
+  $("#kid-wake-s").textContent = night ? "сейчас ночь: утренний подъём отмечается с 4:00"
+    : w ? `сегодня в ${hm(toMin(w))} · нажми, чтобы заменить на ${hm(toMin(nowHM()))}` : `запишу ${hm(toMin(nowHM()))}`;
   $("#kid-sleep-l").textContent = `${name} уснул`;
   $("#kid-sleep-s").textContent = b ? `${bd === tk ? "сегодня" : "вчера"} в ${hm(toMin(b))} · нажми, чтобы заменить` : `запишу ${hm(toMin(nowHM()))} как отбой`;
-  $("#kid-wake").disabled = $("#kid-sleep").disabled = !canWrite();
+  $("#kid-wake").disabled = !canWrite() || night;
+  $("#kid-sleep").disabled = !canWrite();
   const u = $("#kid-undo");
   u.hidden = !S.kidUndo;
   if (S.kidUndo) u.innerHTML = `Записал: ${esc(S.kidUndo.text)}. <button type="button" class="linkbtn" id="kid-undo-btn">Отменить</button>`;
@@ -839,6 +842,7 @@ document.addEventListener("click", e => {
 });
 function kidMark(field) {
   if (!canWrite()) { $("#connect-panel").open = true; return; }
+  if (field === "wake" && new Date().getHours() < 4) return;
   const date = field === "wake" ? ymd(todayDate()) : bedDateNow(), now = nowHM();
   const prev = S.data.kid[date]?.[field] ?? null;
   S.kidUndo = { date, field, prev, text: `${kidName()} ${field === "wake" ? "проснулся" : "уснул"} в ${hm(toMin(now))}` };

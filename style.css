@@ -167,7 +167,7 @@ footer { margin-top:48px; padding-top:14px; border-top:1px solid var(--rule); fo
   border:1px solid var(--rule); border-radius:4px; background:var(--surface); -webkit-tap-highlight-color:transparent; }
 .kbtn:hover { border-color:var(--ink-faint); }
 .kbtn svg { width:30px; height:30px; }
-.kbtn b { display:block; font-family:Archivo,sans-serif; font-weight:600; font-size:16px; }
+.kbtn b { color:var(--ink); display:block; font-family:Archivo,sans-serif; font-weight:600; font-size:16px; }
 .kbtn span { font-size:13px; color:var(--ink-faint); }
 .kbtn:disabled { opacity:.5; cursor:default; }
 .undo { margin:10px 0 0; font-size:14px; color:var(--ink-soft); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
