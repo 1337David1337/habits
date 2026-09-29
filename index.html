@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -71,6 +71,7 @@
         <div class="done-chips" id="kid-done"></div>
       </section>
 
+      <section class="card span2 pray-card" id="pray-card" hidden></section>
       <section class="card span2 ritual" id="ritual-card" hidden></section>
       <section class="card span2 slot-card" id="slot-card" hidden></section>
 
@@ -258,6 +259,21 @@
         </div>
       </section>
 
+      <section class="card span2" id="pray-stats">
+        <div class="card-h"><h2>Молитва</h2><small id="ps-aside"></small></div>
+        <div class="tiles" id="ps-tiles"></div>
+        <div class="charts2">
+          <figure>
+            <figcaption>Минуты молитвы по дням<small>Последние 14 дней. Линия — твоя цель на день.</small></figcaption>
+            <div class="chart" id="ps-chart"></div>
+          </figure>
+          <figure>
+            <figcaption>Успел до подъёма Марка<small id="ps-when-cap">Закончилась ли молитва до того, как Марк проснулся.</small></figcaption>
+            <ul class="plain checks" id="ps-when"></ul>
+          </figure>
+        </div>
+      </section>
+
       <section class="card span2" id="focus-time">
         <div class="card-h"><h2>Время на цели</h2><small id="ft-aside"></small></div>
         <div class="tiles" id="ft-tiles"></div>
@@ -372,6 +388,21 @@
       </section>
 
       <section class="card span2">
+        <details class="sub" id="pray-set">
+          <summary>Молитва</summary>
+          <div class="fgrid">
+            <label for="pr-target">Цель на молитву <select class="field" id="pr-target"></select></label>
+            <label for="pr-habit">После молитвы отмечать <select class="field" id="pr-habit"></select></label>
+            <label class="check" for="pr-chime"><input type="checkbox" id="pr-chime"> Колокольчик, когда цель достигнута</label>
+          </div>
+          <label class="plan-l" for="pr-plan">План молитвы — по пункту в строке
+            <textarea class="field" id="pr-plan" rows="6" placeholder="Благодарность&#10;Покаяние&#10;Жена и Марк&#10;Церковь и служение&#10;Работа&#10;Мои просьбы"></textarea>
+          </label>
+          <p class="note">Во время молитвы показывается текущий пункт и кнопка «Дальше». Пустой план — таймер просто считает время.</p>
+        </details>
+      </section>
+
+      <section class="card span2">
         <details class="sub">
           <summary>Google Задачи</summary>
           <p class="state" id="gt-state"></p>
@@ -427,6 +458,39 @@
 
 <nav class="tabbar" aria-label="Разделы" data-nav></nav>
 <datalist id="step-options"></datalist>
+<div class="pray" id="pray" hidden role="dialog" aria-modal="true" aria-label="Молитва">
+  <div class="pray-in">
+    <header class="pray-h">
+      <span id="pray-state">Молитва</span>
+      <button type="button" class="pray-x" id="pray-min" aria-label="Свернуть">Свернуть</button>
+    </header>
+    <div class="pray-main" id="pray-main">
+      <div class="ring">
+        <svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="88" class="ring-bg"/><circle cx="100" cy="100" r="88" class="ring-fg" id="ring-fg"/></svg>
+        <div class="ring-t"><b id="pray-time">0:00</b><span id="pray-goal"></span></div>
+      </div>
+      <div class="pray-point" id="pray-point" hidden>
+        <span class="pp-n" id="pp-n"></span>
+        <b id="pp-t"></b>
+        <button type="button" class="pray-btn soft" id="pp-next">Дальше</button>
+      </div>
+      <div class="pray-actions">
+        <button type="button" class="pray-btn soft" id="pray-pause">Пауза</button>
+        <button type="button" class="pray-btn" id="pray-finish">Завершить</button>
+      </div>
+    </div>
+    <div class="pray-main" id="pray-end" hidden>
+      <b class="pray-done">Аминь</b>
+      <label class="pray-lab" for="pray-mins">Записать минут</label>
+      <input class="pray-input" id="pray-mins" type="number" min="1" max="300" inputmode="numeric">
+      <p class="pray-sub" id="pray-end-sub"></p>
+      <div class="pray-actions">
+        <button type="button" class="pray-btn soft" id="pray-discard">Не записывать</button>
+        <button type="button" class="pray-btn" id="pray-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-in" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
     <header class="sheet-h">
@@ -443,6 +507,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

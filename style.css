@@ -578,3 +578,44 @@ body.noscroll { overflow:hidden; }
 .kgo { font-size:12.5px; font-weight:600; padding:6px 10px; border-radius:20px; background:var(--card); white-space:nowrap; }
 .kbtn.kid .kgo { color:var(--amber); } .kbtn.sleep .kgo { color:var(--blue); } .kbtn.night .kgo { color:var(--violet); } .kbtn.me .kgo { color:var(--teal); }
 @media (max-width:420px) { .kbtn { grid-template-columns:26px 1fr auto; } .kgo { padding:5px 8px; font-size:12px; } }
+
+/* ---------- молитва ---------- */
+.pray-card { display:flex; align-items:center; gap:14px; background:var(--violet-bg); box-shadow:none; }
+.pray-card .pc-t { flex:1; min-width:0; }
+.pray-card b { display:block; font-size:16px; font-weight:600; color:var(--violet); }
+.pray-card span { font-size:13.5px; color:var(--soft); }
+.pray-card .pc-live { font-size:26px; font-weight:700; color:var(--violet); font-variant-numeric:tabular-nums; }
+.pray-card .btn { background:var(--violet); white-space:nowrap; }
+.fgrid label.check { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--soft); font-weight:500; }
+.fgrid label.check input { width:18px; height:18px; accent-color:var(--teal); }
+label.plan-l { display:grid; gap:6px; margin-top:12px; font-size:12.5px; font-weight:500; color:var(--faint); }
+label.plan-l textarea { width:100%; resize:vertical; font-size:15px; line-height:1.5; }
+/* полноэкранный режим — всегда тёмный и тихий, в любой теме */
+.pray { position:fixed; inset:0; z-index:50; background:#0B0F14; color:#E6EAF0; display:flex; justify-content:center;
+  padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px); }
+.pray-in { width:100%; max-width:520px; display:flex; flex-direction:column; padding:18px 22px 26px; }
+.pray-h { display:flex; justify-content:space-between; align-items:center; font-size:14px; color:#8E99A8; }
+.pray-x { background:none; border:0; color:#8E99A8; font-size:14px; padding:6px 0; }
+.pray-main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; }
+.ring { position:relative; width:min(72vw, 300px); aspect-ratio:1; }
+.ring svg { width:100%; height:100%; transform:rotate(-90deg); }
+.ring-bg { fill:none; stroke:#1C232C; stroke-width:6; }
+.ring-fg { fill:none; stroke:#A79BF0; stroke-width:6; stroke-linecap:round; transition:stroke-dashoffset 1s linear; }
+.ring-fg.over { stroke:#3CC2A6; }
+.ring-t { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+.ring-t b { font-size:clamp(46px, 15vw, 64px); font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.ring-t span { font-size:14px; color:#8E99A8; }
+.pray.paused .ring-t b { opacity:.45; }
+.pray-point { width:100%; text-align:center; display:grid; gap:8px; justify-items:center; }
+.pp-n { font-size:12.5px; color:#8E99A8; letter-spacing:.06em; text-transform:uppercase; }
+.pray-point b { font-size:22px; font-weight:600; line-height:1.3; max-width:22ch; text-wrap:balance; }
+.pray-actions { display:flex; gap:12px; width:100%; }
+.pray-btn { flex:1; border:0; border-radius:16px; padding:15px 12px; font-size:16px; font-weight:600; background:#A79BF0; color:#0B0F14; }
+.pray-btn.soft { background:#1C232C; color:#E6EAF0; }
+.pray-point .pray-btn { flex:none; padding:9px 20px; font-size:14px; }
+.pray-done { font-size:34px; font-weight:600; }
+.pray-lab { font-size:13px; color:#8E99A8; margin-bottom:-18px; }
+.pray-input { background:#151B22; border:1px solid #28303A; color:#E6EAF0; border-radius:16px; font-size:40px; font-weight:600;
+  width:160px; text-align:center; padding:8px; font-variant-numeric:tabular-nums; }
+.pray-sub { margin:0; font-size:14px; color:#8E99A8; text-align:center; }
+.tl .pray::before { background:var(--violet); }

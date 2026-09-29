@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
   busyDays: [], busyLabel: "", spheres: ["работа","семья","здоровье","дом","деньги"],
   kidName: "", kidNameGen: "", morningMinutes: 30, morningHabit: "", bedFrom: "21:00",
   slots: [], tasksUrl: "", tasksKey: "", togetherPerWeek: 1, work: null,
+  prayerTarget: 15, prayerChime: true, prayerHabit: null, prayerPlan: [],
 };
 // Прогноз подъёма: окно истории, период полураспада веса и шаг календаря
 const K_WINDOW = 42, K_HALF = 10, SLOT = 15;
@@ -102,6 +103,8 @@ function applyOp(d, op) {
   } else if (op.t === "session") {
     if (op.data == null) delete d.sessions[op.key];
     else d.sessions[op.key] = { ...(d.sessions[op.key] || {}), ...op.data };
+  } else if (op.t === "prayer") {
+    if (!op.items || !op.items.length) delete d.prayer[op.date]; else d.prayer[op.date] = op.items;
   } else if (op.t === "focus") {
     if (!op.items || !op.items.length) delete d.focus[op.date]; else d.focus[op.date] = op.items;
   } else if (op.t === "ritual") {
@@ -118,7 +121,7 @@ function normalize(d) {
   return { version: 1, ...d, settings: { ...DEFAULT_SETTINGS, ...obj(d.settings) },
     habits: Array.isArray(d.habits) ? d.habits : [], log: obj(d.log), kid: obj(d.kid),
     me: obj(d.me), together: obj(d.together), reviews: obj(d.reviews), goals: Array.isArray(d.goals) ? d.goals : [],
-    sessions: obj(d.sessions), focus: obj(d.focus), rituals: obj(d.rituals) };
+    sessions: obj(d.sessions), focus: obj(d.focus), rituals: obj(d.rituals), prayer: obj(d.prayer) };
 }
 function recompute() {
   S.memo = null; S.recMemo = new Map();
@@ -199,6 +202,7 @@ function commitMsg(ops) {
   if (ops.some(o => o.t.startsWith("goal"))) parts.push("цели");
   if (ops.some(o => o.t === "session")) parts.push("слоты");
   if (ops.some(o => o.t === "focus")) parts.push("главное на день");
+  ops.filter(o => o.t === "prayer").forEach(o => parts.push(`Молитва ${fmtDM.format(parse(o.date))}: ${(o.items || []).reduce((a, x) => a + x.m, 0)} мин`));
   if (ops.some(o => o.t === "ritual")) parts.push("вечерние 5 минут");
   if (ops.some(o => o.t === "habit" || o.t === "del")) parts.push("настройка привычек");
   if (ops.some(o => o.t === "settings")) parts.push("настройки");
@@ -454,19 +458,20 @@ function roundTop(x, y, w, h, r) {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 }
 function chartWidth(el) { return Math.max(260, Math.round(el.clientWidth || el.parentElement?.clientWidth || 320)); }
-function barChart(el, items, { h = 170, hl } = {}) {
-  if (!items.some(it => it.value != null)) { el.innerHTML = `<p class="empty-c">Данных за этот период пока нет.</p>`; return; }
-  const W = chartWidth(el), pl = 34, pr = 4, pt = 8, pb = items.some(i => i.sub) ? 34 : 22, H = h;
+function barChart(el, items, { h = 170, hl, max = 1, fmt = v => Math.round(v * 100) + "%", line = null, empty = "Данных за этот период пока нет." } = {}) {
+  if (!items.some(it => it.value != null && (max === 1 || it.value > 0))) { el.innerHTML = `<p class="empty-c">${esc(empty)}</p>`; return; }
+  const W = chartWidth(el), pl = max === 1 ? 34 : 48, pr = 4, pt = 8, pb = items.some(i => i.sub) ? 34 : 22, H = h;
   const iw = W - pl - pr, ih = H - pt - pb, step = iw / items.length, bw = Math.min(26, step * .62);
   let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Столбчатая диаграмма">`;
   for (const g of [0, .5, 1]) {
     const y = pt + ih * (1 - g);
-    s += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" class="grid"/><text x="${pl - 6}" y="${y + 3.5}" class="ax" text-anchor="end">${g * 100}%</text>`;
+    s += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" class="grid"/><text x="${pl - 6}" y="${y + 3.5}" class="ax" text-anchor="end">${fmt(g * max)}</text>`;
   }
+  if (line != null) { const y = pt + ih * (1 - Math.min(1, line / max)); s += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" class="fit"/>`; }
   items.forEach((it, i) => {
     const cx = pl + step * i + step / 2;
     if (it.value != null) {
-      const bh = it.value > 0 ? Math.max(3, ih * Math.min(1, it.value)) : 0;
+      const bh = it.value > 0 ? Math.max(3, ih * Math.min(1, it.value / max)) : 0;
       if (bh) s += `<path d="${roundTop(cx - bw / 2, pt + ih - bh, bw, bh, 4)}" class="bar ${it.current ? "cur" : ""}"/>`;
     }
     s += `<rect x="${pl + step * i}" y="${pt}" width="${step}" height="${ih}" fill="transparent" data-tip="${esc(it.tip)}"/>`;
@@ -549,6 +554,7 @@ function render() {
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
   renderStepOptions(); renderRitualCard(); renderSlotCard(); renderFocus(); renderSlotPlan(); renderFocusTime();
+  renderPrayCard(); renderPrayStats(); renderPraySettings();
 }
 function renderHeader() {
   const t = todayDate(), tk = ymd(t), v = currentView();
@@ -1098,6 +1104,9 @@ function renderPlan() {
     const ss = sess(sKey(k, x.from)), stx = { done: " · сделано", started: " · идёт", skipped: " · пропущен", moved: " · перенесён" }[ss?.status] || "";
     add(toMin(x.from), `${hz(x.from)}–${hz(x.to)}`, "slot" + (ss?.status === "done" ? " done" : ""), "Свободный слот", ss?.text ? `${ss.text}${stx}` : "шаг не выбран");
   });
+  (S.data.prayer[k] || []).forEach(x => add(toMin(x.s), hm(toMin(x.s)), "pray done", "Молитва", fmtDur(x.m)));
+  const pr = prRun();
+  if (pr && pr.date === k) add(toMin(pr.s), hm(toMin(pr.s)), "pray", pr.paused ? "Молитва на паузе" : "Молитва идёт", mmss(prElapsed(pr)));
   if (isToday) { const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); ev.push({ t: m + .5, now: true, time: hm(m) }); }
   ev.sort((x, y) => x.t - y.t);
   $("#day-tl").innerHTML = ev.filter(e => !e.now).length
@@ -2107,6 +2116,170 @@ $("#slot-plan-list").addEventListener("change", e => {
   if (o) op(o);
 });
 $("#rv-start").addEventListener("click", () => openWizard("weekly"));
+
+/* ---------- молитва ---------- */
+// Идущий таймер живёт в localStorage этого устройства: {start, paused, idle, point, marks[], chimed, date, s}
+const PR_KEY = "habits.prayer";
+let prTick = null, wakeLock = null, audioCtx = null;
+function prRun() { try { return JSON.parse(localStorage.getItem(PR_KEY)); } catch { return null; } }
+function prSave(v) { try { v ? localStorage.setItem(PR_KEY, JSON.stringify(v)) : localStorage.removeItem(PR_KEY); } catch {} }
+function prElapsed(r = prRun()) { return r ? Math.max(0, (r.paused || Date.now()) - r.start - (r.idle || 0)) : 0; }
+const mmss = ms => { const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60); return h ? `${h}:${pad(m)}:${pad(t % 60)}` : `${m}:${pad(t % 60)}`; };
+const prTarget = () => settings().prayerTarget || 15;
+const prPlan = () => (settings().prayerPlan || []).map(x => String(x).trim()).filter(Boolean);
+const prHabitId = () => { const st = settings(); return st.prayerHabit == null ? st.morningHabit || "" : st.prayerHabit; };
+const prayMinutes = k => (S.data?.prayer?.[k] || []).reduce((a, x) => a + (x.m || 0), 0);
+
+function startPrayer() {
+  if (!prRun()) prSave({ start: Date.now(), paused: null, idle: 0, point: 0, marks: [], chimed: false, date: ymd(todayDate()), s: nowHM() });
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume?.(); } catch {}
+  openPray();
+}
+function openPray() {
+  $("#pray").hidden = false; $("#pray-main").hidden = false; $("#pray-end").hidden = true;
+  document.body.classList.add("noscroll");
+  keepAwake(true); tickPray(); renderPlan();
+}
+function hidePray() { $("#pray").hidden = true; document.body.classList.remove("noscroll"); keepAwake(false); renderPrayCard(); renderPlan(); }
+function tickPray() {
+  const r = prRun();
+  renderPrayCard();
+  if ($("#pray").hidden || !r || !$("#pray-end").hidden) return;
+  const el = prElapsed(r), tgt = prTarget() * 60000, C = 2 * Math.PI * 88, fg = $("#ring-fg");
+  $("#pray-time").textContent = mmss(el);
+  $("#pray-goal").textContent = el >= tgt ? `цель ${prTarget()} мин — есть` : `цель ${prTarget()} мин`;
+  fg.style.strokeDasharray = C; fg.style.strokeDashoffset = C * (1 - Math.min(1, el / tgt)); fg.classList.toggle("over", el >= tgt);
+  $("#pray").classList.toggle("paused", !!r.paused);
+  $("#pray-state").textContent = r.paused ? "Пауза" : "Молитва";
+  $("#pray-pause").textContent = r.paused ? "Продолжить" : "Пауза";
+  const plan = prPlan(), i = Math.min(r.point || 0, plan.length);
+  $("#pray-point").hidden = !plan.length;
+  if (plan.length) {
+    $("#pp-n").textContent = i < plan.length ? `Пункт ${i + 1} из ${plan.length}` : "План пройден";
+    $("#pp-t").textContent = i < plan.length ? plan[i] : "Можно продолжать свободно или завершить";
+    $("#pp-next").hidden = i >= plan.length;
+    $("#pp-next").textContent = i === plan.length - 1 ? "Последний пункт — готово" : "Дальше";
+  }
+  if (!r.chimed && !r.paused && el >= tgt) { r.chimed = true; prSave(r); if (settings().prayerChime !== false) chime(); }
+}
+// Тихий колокольчик из двух нот, без внешних файлов
+function chime() {
+  try {
+    const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(), t = ctx.currentTime;
+    [[987.8, 0], [1318.5, .35]].forEach(([f, d]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, t + d); g.gain.exponentialRampToValueAtTime(.2, t + d + .02); g.gain.exponentialRampToValueAtTime(.0001, t + d + 2.4);
+      o.connect(g).connect(ctx.destination); o.start(t + d); o.stop(t + d + 2.5);
+    });
+  } catch {}
+}
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener?.("release", () => { wakeLock = null; }); }
+    else if (!on && wakeLock) { const w = wakeLock; wakeLock = null; await w.release(); }
+  } catch { wakeLock = null; }
+}
+function finishPrayer() {
+  const r = prRun(); if (!r) return;
+  if (!r.paused) r.paused = Date.now();
+  prSave(r);
+  const plan = prPlan(), mins = Math.max(1, Math.round(prElapsed(r) / 60000)), hid = prHabitId(), h = habits().find(x => x.id === hid && !x.archived);
+  $("#pray-main").hidden = true; $("#pray-end").hidden = false;
+  $("#pray-mins").value = mins;
+  $("#pray-end-sub").textContent = [`Начало в ${hz(r.s)}`, plan.length ? `пунктов плана: ${Math.min(r.point || 0, plan.length)} из ${plan.length}` : "",
+    h && !isDone(r.date, h.id) ? `привычка «${h.name}» отметится` : ""].filter(Boolean).join(" · ");
+}
+function savePrayer() {
+  const r = prRun(); if (!r) { hidePray(); return; }
+  const m = Math.max(1, Math.min(300, Math.round(Number($("#pray-mins").value) || 0)));
+  const prev = S.data.prayer[r.date] || [], plan = prPlan();
+  const item = { s: r.s, m };
+  if (plan.length) { item.p = Math.min(r.point || 0, plan.length); item.marks = (r.marks || []).map(ms => Math.round(ms / 1000)); }
+  const ops = [{ t: "prayer", date: r.date, items: [...prev, item] }];
+  const hid = prHabitId(), marked = hid && habits().some(x => x.id === hid && !x.archived) && !isDone(r.date, hid);
+  if (marked) ops.push({ t: "check", date: r.date, hid, val: true });
+  if (!op(...ops)) return;
+  prSave(null); hidePray();
+  toast(`Молитва ${fmtDur(m)} записана${marked ? " · привычка отмечена" : ""}`, () => {
+    const back = [{ t: "prayer", date: r.date, items: prev }];
+    if (marked) back.push({ t: "check", date: r.date, hid, val: false });
+    op(...back);
+  });
+}
+function renderPrayCard() {
+  const card = $("#pray-card");
+  if (!card || !S.data) return;
+  const r = prRun(), hr = new Date().getHours(), tk = ymd(todayDate());
+  card.hidden = !r && !(hr >= 3 && hr < 12);
+  if (card.hidden) return;
+  const done = prayMinutes(tk), tgt = prTarget();
+  card.innerHTML = r
+    ? `<div class="pc-t"><b>${r.paused ? "Молитва на паузе" : "Молитва идёт"}</b><span class="pc-live">${mmss(prElapsed(r))}</span></div><button type="button" class="btn" data-pray="open">Открыть</button>`
+    : `<div class="pc-t"><b>Молитва</b><span>${done ? `сегодня ${fmtDur(done)} · цель ${tgt} мин` : `цель ${tgt} мин · экран не погаснет`}</span></div><button type="button" class="btn" data-pray="start">Начать</button>`;
+}
+function renderPrayStats() {
+  const t = todayDate(), tgt = prTarget(), days = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = addDays(t, -i), m = prayMinutes(ymd(d));
+    days.push({ label: String(d.getDate()), value: m, current: i === 0, tip: `${fmtShort.format(d)} · ${m ? fmtDur(m) : "не было"}` });
+  }
+  const max = Math.ceil(Math.max(tgt * 1.4, ...days.map(x => x.value)) / 10) * 10;
+  barChart($("#ps-chart"), days, { max, fmt: v => `${Math.round(v)} мин`, line: tgt, empty: "Пока нет записанных молитв. Запусти таймер утром на главной." });
+  let week = 0, sum14 = 0, streak = 0, span = 0;
+  for (let i = 0; i < 7; i++) week += prayMinutes(ymd(addDays(t, -i)));
+  // Среднее — по дням с первой записи, но не больше 14, чтобы первые дни не занижали цифру
+  const firstK = Object.keys(S.data.prayer).sort()[0];
+  for (let i = 0; i < 14; i++) { const k = ymd(addDays(t, -i)); if (firstK && k >= firstK) { sum14 += prayMinutes(k); span++; } }
+  for (let i = prayMinutes(ymd(t)) ? 0 : 1; i < 400 && prayMinutes(ymd(addDays(t, -i))); i++) streak++;
+  const tile = (v, l) => `<div><b>${v}</b><span>${l}</span></div>`;
+  $("#ps-tiles").innerHTML = tile(prayMinutes(ymd(t)) ? fmtDur(prayMinutes(ymd(t))) : "—", "сегодня") + tile(week ? fmtDur(week) : "—", "за 7 дней")
+    + tile(sum14 ? fmtDur(sum14 / span) : "—", "в среднем в день") + tile(`${streak} ${plural(streak, "день", "дня", "дней")}`, "подряд");
+  $("#ps-aside").textContent = `цель ${tgt} мин`;
+  // Успел ли закончить до подъёма Марка
+  const rows = [];
+  for (let i = 0; i < 14 && rows.length < 7; i++) {
+    const d = addDays(t, -i), k = ymd(d), list = S.data.prayer[k] || [], w = wakeOf(k);
+    if (!list.length) continue;
+    const first = list[0], end = toMin(first.s) + list.reduce((a, x) => a + x.m, 0);
+    const state = w == null ? "" : end <= w ? "ok" : "warn";
+    const val = w == null ? "подъём Марка не отмечен" : end <= w ? `запас ${fmtDur(w - end)}` : `Марк проснулся раньше на ${fmtDur(end - w)}`;
+    rows.push(`<li class="${state}"><span class="dot"></span><span class="ck-name">${fmtShort.format(d)}<span class="ck-sub">${hz(first.s)}–${hm(end)}${w != null ? ` · ${esc(kidName())} ${hm(w)}` : ""}</span></span><span class="ck-val">${val}</span></li>`);
+  }
+  $("#ps-when").innerHTML = rows.join("") || `<li class="empty">Появится после первых утренних молитв.</li>`;
+}
+function renderPraySettings() {
+  const st = settings(), f = document.activeElement;
+  if ($("#pr-target") !== f) $("#pr-target").innerHTML = [5, 10, 15, 20, 25, 30, 45, 60].map(n => `<option value="${n}" ${n === prTarget() ? "selected" : ""}>${n} мин</option>`).join("");
+  if ($("#pr-habit") !== f) $("#pr-habit").innerHTML = `<option value="">ничего</option>` + active().map(h => `<option value="${esc(h.id)}" ${h.id === prHabitId() ? "selected" : ""}>«${esc(h.name)}»</option>`).join("");
+  $("#pr-chime").checked = st.prayerChime !== false;
+  if ($("#pr-plan") !== f) $("#pr-plan").value = (st.prayerPlan || []).join("\n");
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-pray]");
+  if (!b) return;
+  if (b.dataset.pray === "start") startPrayer(); else openPray();
+});
+$("#pray-min").addEventListener("click", hidePray);
+$("#pray-pause").addEventListener("click", () => {
+  const r = prRun(); if (!r) return;
+  if (r.paused) { r.idle = (r.idle || 0) + Date.now() - r.paused; r.paused = null; } else r.paused = Date.now();
+  prSave(r); tickPray();
+});
+$("#pp-next").addEventListener("click", () => {
+  const r = prRun(); if (!r) return;
+  r.point = (r.point || 0) + 1; (r.marks ||= []).push(prElapsed(r));
+  prSave(r); tickPray();
+});
+$("#pray-finish").addEventListener("click", finishPrayer);
+$("#pray-save").addEventListener("click", savePrayer);
+$("#pray-discard").addEventListener("click", () => { prSave(null); hidePray(); toast("Молитва не записана"); });
+$("#pr-target").addEventListener("change", e => setSetting({ prayerTarget: Number(e.target.value) }));
+$("#pr-habit").addEventListener("change", e => setSetting({ prayerHabit: e.target.value }));
+$("#pr-chime").addEventListener("change", e => setSetting({ prayerChime: e.target.checked }));
+$("#pr-plan").addEventListener("change", e => setSetting({ prayerPlan: e.target.value.split("\n").map(x => x.trim()).filter(Boolean) }));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !$("#pray").hidden) keepAwake(true); });
+setInterval(() => { if (prRun()) tickPray(); }, 1000);
 
 /* ---------- тема ---------- */
 function themeChoice() { try { const t = localStorage.getItem("habits.theme"); return t === "light" || t === "dark" ? t : "auto"; } catch { return "auto"; } }
