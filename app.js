@@ -6,7 +6,7 @@ const CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3
 const LS = { cfg: "habits.cfg", base: "habits.base", pending: "habits.pending", view: "habits.view", tasks: "habits.tasks" };
 const DEFAULT_SETTINGS = {
   busyDays: [], busyLabel: "", spheres: ["работа","семья","здоровье","дом","деньги"],
-  kidName: "", kidNameGen: "", morningMinutes: 30, morningHabit: "",
+  kidName: "", kidNameGen: "", morningMinutes: 30, morningHabit: "", bedFrom: "21:00",
   slots: [], tasksUrl: "", tasksKey: "", togetherPerWeek: 1, work: null,
 };
 // Прогноз подъёма: окно истории, период полураспада веса и шаг календаря
@@ -424,9 +424,11 @@ function kidTarget() {
 }
 // Какие кнопки сна показывать сейчас. night0 — «текущая» ночь для плашек и редактора:
 // днём и утром это прошлая ночь, с 17:00 — сегодняшняя.
+// С какого времени показывать «уснул»: из настроек, но за 30 минут до самого раннего отбоя за месяц, не раньше 18:00
 function bedFrom() {
-  const beds = recentKid(30).beds.filter(b => b < 1440);
-  return beds.length >= 3 ? Math.max(17 * 60, Math.min(19 * 60, median(beds) - 60)) : 19 * 60;
+  const set = toMin(settings().bedFrom) ?? 21 * 60, beds = recentKid(30).beds;
+  const early = beds.length >= 3 ? wq(beds, beds.map(() => 1), .1) - 30 : Infinity;
+  return Math.max(18 * 60, Math.min(set, early));
 }
 function kidButtons() {
   const hr = new Date().getHours(), t = todayDate(), tk = ymd(t), nd = bedDateNow();
@@ -793,6 +795,7 @@ function renderKidSettings() {
   const set = (id, v) => { const el = $(id); if (el !== focus) el.value = v; };
   set("#ks-name", st.kidName || "");
   set("#ks-gen", st.kidNameGen || "");
+  set("#ks-bedfrom", st.bedFrom || "21:00");
   if ($("#ks-min") !== focus) $("#ks-min").innerHTML = [10, 15, 20, 30, 45, 60, 90].map(n => `<option value="${n}" ${n === (st.morningMinutes || 30) ? "selected" : ""}>${n} мин</option>`).join("");
   if ($("#ks-habit") !== focus) $("#ks-habit").innerHTML = `<option value="">не выбрана</option>` +
     active().map(h => `<option value="${esc(h.id)}" ${h.id === st.morningHabit ? "selected" : ""}>${esc(h.name)}</option>`).join("");
@@ -1471,6 +1474,7 @@ $("#ks-name").addEventListener("change", e => setSetting({ kidName: e.target.val
 $("#ks-gen").addEventListener("change", e => setSetting({ kidNameGen: e.target.value.trim() }));
 $("#ks-min").addEventListener("change", e => setSetting({ morningMinutes: Number(e.target.value) }));
 $("#ks-habit").addEventListener("change", e => setSetting({ morningHabit: e.target.value }));
+$("#ks-bedfrom").addEventListener("change", e => { if (e.target.value) setSetting({ bedFrom: e.target.value }); });
 $("#kc-prev").addEventListener("click", () => { S.kidOffset--; renderKid(); });
 $("#kc-next").addEventListener("click", () => { if (S.kidOffset < 0) { S.kidOffset++; renderKid(); } });
 
