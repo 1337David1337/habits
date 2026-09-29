@@ -1650,6 +1650,20 @@ $("#gt-form").addEventListener("submit", e => {
   if (setSetting({ tasksUrl: url, tasksKey: url ? key : "" })) loadTasks(true);
 });
 
+/* ---------- тема ---------- */
+function themeChoice() { try { const t = localStorage.getItem("habits.theme"); return t === "light" || t === "dark" ? t : "auto"; } catch { return "auto"; } }
+function applyTheme(t) {
+  if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { t === "auto" ? localStorage.removeItem("habits.theme") : localStorage.setItem("habits.theme", t); } catch {}
+  const dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => { m.content = dark ? "#0F1216" : "#EEF1F4"; });
+  document.querySelectorAll("#theme-seg button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.themeOpt === t)));
+  $("#theme-note").textContent = t === "auto" ? "Как в системе телефона или компьютера." : t === "dark" ? "Всегда тёмная — удобно ночью." : "Всегда светлая.";
+  if (S.data) { renderKid(); renderGoals(); renderProgress(); }
+}
+document.querySelectorAll("#theme-seg button").forEach(b => b.addEventListener("click", () => applyTheme(b.dataset.themeOpt)));
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (themeChoice() === "auto") applyTheme("auto"); });
+
 /* ---------- подсказки ---------- */
 const tip = $("#tip");
 function showTip(el) {
@@ -1687,5 +1701,6 @@ if (!S.cfg) $("#connect-panel").open = true;
 if (S.cfg && S.pending.length) setSync("pending");
 lastKey = ymd(todayDate()) + (new Date().getHours() < 12 ? "am" : "pm");
 route();
+applyTheme(themeChoice());
 if (S.cfg) S.pending.length ? flush() : refresh();
 })();

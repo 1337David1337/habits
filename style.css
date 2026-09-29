@@ -15,7 +15,8 @@
   --surface:var(--card); --paper:var(--bg);
   color-scheme:light;
 }
-@media (prefers-color-scheme:dark) { :root {
+/* Тёмная тема: по системе (если не выбрана светлая) или явно выбранная */
+@media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) {
   --bg:#0F1216; --card:#181C22; --ink:#E8ECF1; --soft:#A9B2BD; --faint:#858F9B; --line:#262C34; --line2:#333A44;
   --field:#1F242B;
   --teal:#3CC2A6; --teal-bg:#15302B; --amber:#F0A15A; --amber-bg:#33251A; --blue:#7FA8DA; --blue-bg:#1B2735;
@@ -28,6 +29,19 @@
   --tip-bg:#E8ECF1; --tip-ink:#0F1216;
   color-scheme:dark;
 } }
+:root[data-theme="dark"] {
+  --bg:#0F1216; --card:#181C22; --ink:#E8ECF1; --soft:#A9B2BD; --faint:#858F9B; --line:#262C34; --line2:#333A44;
+  --field:#1F242B;
+  --teal:#3CC2A6; --teal-bg:#15302B; --amber:#F0A15A; --amber-bg:#33251A; --blue:#7FA8DA; --blue-bg:#1B2735;
+  --violet:#A79BF0; --violet-bg:#242038; --pink:#F07AAE; --pink-bg:#361B29; --warn:#FF8A7A; --warn-bg:#3A1F1C;
+  --on-accent:#0F1216;
+  --s0:#1F242B; --s1:#173A33; --s2:#1F6456; --s3:#2E9A83; --s4:#3CC2A6;
+  --k0:#1C2129; --k1:#1E2E42; --k2:#2E4D72; --k3:#5A83B6; --k4:#8FB5E3;
+  --wake:#F0A15A;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+  --tip-bg:#E8ECF1; --tip-ink:#0F1216;
+  color-scheme:dark;
+}
 
 * { box-sizing:border-box; }
 html { -webkit-text-size-adjust:100%; }
@@ -478,3 +492,7 @@ ul.nights { list-style:none; margin:10px 0 6px; padding:0; display:grid; gap:6px
 .night-row span { font-size:12.5px; color:var(--faint); }
 .night-row[aria-current="true"] { background:var(--teal-bg); }
 .night-row[aria-current="true"] b { color:var(--teal); }
+
+/* ---------- оформление ---------- */
+.theme-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.theme-row p { margin:0; font-size:14px; color:var(--soft); }
