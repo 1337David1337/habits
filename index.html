@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -67,6 +67,9 @@
         <div class="done-chips" id="kid-done"></div>
       </section>
 
+      <section class="card span2 ritual" id="ritual-card" hidden></section>
+      <section class="card span2 slot-card" id="slot-card" hidden></section>
+
       <section class="card" id="day">
         <div class="card-h">
           <h2 id="day-title">День</h2>
@@ -79,6 +82,10 @@
       </section>
 
       <div class="stack">
+        <section class="card" id="focus-card">
+          <div class="card-h"><h2>Главное на сегодня</h2><small id="focus-count"></small></div>
+          <ul class="focus" id="focus-list"></ul>
+        </section>
         <section class="card">
           <div class="card-h"><h2>Привычки</h2><small id="hab-count"></small></div>
           <ul class="today" id="today-list"></ul>
@@ -167,6 +174,12 @@
         </details>
       </section>
 
+      <section class="card span2" id="slot-plan">
+        <div class="card-h"><h2>Слоты на неделю</h2><small id="slot-plan-aside"></small></div>
+        <p class="note" style="margin-top:0">Впиши в каждый свободный слот один шаг — выбери из следующих шагов целей или напиши свой.</p>
+        <ul class="splan" id="slot-plan-list"></ul>
+      </section>
+
       <section class="card span2" id="together">
         <div class="card-h"><h2>Время вдвоём</h2>
           <label class="aside" for="tg-norm">норма <select class="field mini" id="tg-norm"></select></label></div>
@@ -241,6 +254,21 @@
         </div>
       </section>
 
+      <section class="card span2" id="focus-time">
+        <div class="card-h"><h2>Время на цели</h2><small id="ft-aside"></small></div>
+        <div class="tiles" id="ft-tiles"></div>
+        <div class="charts2">
+          <figure>
+            <figcaption>Слоты по неделям<small>Какая часть свободного времени ушла на шаги к целям.</small></figcaption>
+            <div class="chart" id="ft-chart"></div>
+          </figure>
+          <figure>
+            <figcaption>По целям за месяц<small id="ft-goals-cap">Время, потраченное в слотах.</small></figcaption>
+            <ul class="hbars" id="ft-goals"></ul>
+          </figure>
+        </div>
+      </section>
+
       <section class="card span2" id="system">
         <div class="card-h"><h2>Система</h2><small id="sys-aside"></small></div>
         <div class="tiles" id="sys-tiles"></div>
@@ -253,7 +281,10 @@
             <h3 class="h3">Обзор недели</h3>
             <div class="wstrip" id="rv-weeks"></div>
             <p class="rv-text" id="rv-text"></p>
-            <button type="button" class="btn" id="rv-btn">Обзор этой недели проведён</button>
+            <div class="row-btns">
+              <button type="button" class="btn" id="rv-start">Провести обзор недели</button>
+              <button type="button" class="btn ghost" id="rv-btn">Отметить без шагов</button>
+            </div>
           </div>
         </div>
       </section>
@@ -390,8 +421,23 @@
 </div>
 
 <nav class="tabbar" aria-label="Разделы" data-nav></nav>
+<datalist id="step-options"></datalist>
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <header class="sheet-h">
+      <div><span class="eyebrow" id="sheet-step"></span><h2 id="sheet-title"></h2></div>
+      <button type="button" class="xbtn big" id="sheet-close" aria-label="Закрыть">×</button>
+    </header>
+    <div class="sheet-dots" id="sheet-dots"></div>
+    <div class="sheet-body" id="sheet-body"></div>
+    <footer class="sheet-f">
+      <button type="button" class="btn ghost" id="sheet-back">Назад</button>
+      <button type="button" class="btn" id="sheet-next">Дальше</button>
+    </footer>
+  </div>
+</div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

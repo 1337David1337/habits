@@ -99,6 +99,14 @@ function applyOp(d, op) {
       else if (st) Object.assign(st, op.data);
       else g.steps.push({ id: op.sid, done: false, ...op.data });
     }
+  } else if (op.t === "session") {
+    if (op.data == null) delete d.sessions[op.key];
+    else d.sessions[op.key] = { ...(d.sessions[op.key] || {}), ...op.data };
+  } else if (op.t === "focus") {
+    if (!op.items || !op.items.length) delete d.focus[op.date]; else d.focus[op.date] = op.items;
+  } else if (op.t === "ritual") {
+    const box = d.rituals[op.kind] || (d.rituals[op.kind] = {});
+    if (op.time == null) delete box[op.date]; else box[op.date] = op.time;
   } else if (op.t === "settings") {
     Object.assign(d.settings, op.data);
   }
@@ -109,7 +117,8 @@ function normalize(d) {
   const obj = v => v && typeof v === "object" && !Array.isArray(v) ? v : {};
   return { version: 1, ...d, settings: { ...DEFAULT_SETTINGS, ...obj(d.settings) },
     habits: Array.isArray(d.habits) ? d.habits : [], log: obj(d.log), kid: obj(d.kid),
-    me: obj(d.me), together: obj(d.together), reviews: obj(d.reviews), goals: Array.isArray(d.goals) ? d.goals : [] };
+    me: obj(d.me), together: obj(d.together), reviews: obj(d.reviews), goals: Array.isArray(d.goals) ? d.goals : [],
+    sessions: obj(d.sessions), focus: obj(d.focus), rituals: obj(d.rituals) };
 }
 function recompute() {
   S.memo = null; S.recMemo = new Map();
@@ -188,6 +197,9 @@ function commitMsg(ops) {
   if (ops.some(o => o.t === "together")) parts.push("время вдвоём");
   if (ops.some(o => o.t === "review")) parts.push("обзор недели");
   if (ops.some(o => o.t.startsWith("goal"))) parts.push("цели");
+  if (ops.some(o => o.t === "session")) parts.push("слоты");
+  if (ops.some(o => o.t === "focus")) parts.push("главное на день");
+  if (ops.some(o => o.t === "ritual")) parts.push("вечерние 5 минут");
   if (ops.some(o => o.t === "habit" || o.t === "del")) parts.push("настройка привычек");
   if (ops.some(o => o.t === "settings")) parts.push("настройки");
   return parts.join("; ") || "Обновление";
@@ -530,6 +542,7 @@ function render() {
   if (!S.data) return;
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
+  renderStepOptions(); renderRitualCard(); renderSlotCard(); renderFocus(); renderSlotPlan(); renderFocusTime();
 }
 function renderHeader() {
   const t = todayDate(), tk = ymd(t), v = currentView();
@@ -1073,7 +1086,10 @@ function renderPlan() {
     const one = beds.map(() => 1);
     add(median(beds), `≈ ${hm(median(beds))}`, "kid", `Отбой ${kidGen()}`, `обычно ${hm(wq(beds, one, .25))}–${hm(wq(beds, one, .75))}`);
   }
-  slotsOn(d).forEach(x => add(toMin(x.from), `${hz(x.from)}–${hz(x.to)}`, "slot", "Свободный слот", "время на свои дела"));
+  slotsOn(d).forEach(x => {
+    const ss = sess(sKey(k, x.from)), stx = { done: " · сделано", started: " · идёт", skipped: " · пропущен", moved: " · перенесён" }[ss?.status] || "";
+    add(toMin(x.from), `${hz(x.from)}–${hz(x.to)}`, "slot" + (ss?.status === "done" ? " done" : ""), "Свободный слот", ss?.text ? `${ss.text}${stx}` : "шаг не выбран");
+  });
   if (isToday) { const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); ev.push({ t: m + .5, now: true, time: hm(m) }); }
   ev.sort((x, y) => x.t - y.t);
   $("#day-tl").innerHTML = ev.filter(e => !e.now).length
@@ -1247,6 +1263,7 @@ function goalCard(g) {
   const conf = S.confirmGoal === g.id;
   const edit = `<details class="g-edit"><summary>Изменить</summary><form class="fgrid" data-gedit>
     <label class="wide">Название <input class="field" name="title" value="${esc(g.title)}" maxlength="80"></label>
+    ${g.kind === "steps" ? "" : `<label class="wide">Следующий шаг <input class="field" name="next" value="${esc(g.next || "")}" maxlength="100" placeholder="Конкретное действие на 1–1,5 часа"></label>`}
     <label>Сфера <select class="field" name="sphere">${sphereOptions(g.sphere)}</select></label>
     <label>Начало <input class="field" type="date" name="startDate" value="${esc(g.startDate || "")}"></label>
     <label>Срок <input class="field" type="date" name="deadline" value="${esc(g.deadline)}"></label>
@@ -1258,8 +1275,12 @@ function goalCard(g) {
     ${conf ? `<button class="btn danger sm" type="button" data-gdelyes>Удалить навсегда</button><button class="btn ghost sm" type="button" data-gdelno>Отмена</button>`
       : `<button class="btn ghost sm" type="button" data-gdel>Удалить</button>`}
   </form></details>`;
+  const ns = nextStepOf(g);
+  const nextLine = st.cls === "done" ? "" : ns
+    ? `<p class="g-next">Следующий шаг: <b>${esc(ns.text)}</b></p>`
+    : `<p class="g-next missing">Нет следующего шага — ${g.kind === "steps" ? "добавь этап" : "впиши его в «Изменить»"}, чтобы поставить в слот.</p>`;
   return `<article class="goal" data-gid="${esc(g.id)}"><header><h3>${esc(g.title)}</h3><span class="chip ${st.cls}">${st.text}</span></header>
-    <p class="g-meta">${g.sphere ? esc(g.sphere) + " · " : ""}${dl}</p>${body}${edit}</article>`;
+    <p class="g-meta">${g.sphere ? esc(g.sphere) + " · " : ""}${dl}</p>${body}${nextLine}${edit}</article>`;
 }
 function goalSpark(el, g) {
   const W = chartWidth(el), H = 86, pl = 2, pr = 2, pt = 6, pb = 16, tm = gTime(g), t = todayDate();
@@ -1340,8 +1361,9 @@ function renderSystem() {
   $("#rv-weeks").innerHTML = cells;
   const n = reviewStreak();
   $("#rv-text").innerHTML = n ? `Серия: <b>${n}</b> ${plural(n, "неделя", "недели", "недель")} подряд.` : "Серии пока нет. Отметь первый обзор, когда проведёшь его.";
-  $("#rv-btn").textContent = reviewed ? "Отменить отметку обзора" : "Обзор этой недели проведён";
-  $("#rv-btn").className = reviewed ? "btn ghost" : "btn";
+  $("#rv-btn").textContent = reviewed ? "Снять отметку" : "Отметить без шагов";
+  $("#rv-start").textContent = reviewed ? "Пройти обзор ещё раз" : "Провести обзор недели";
+  $("#rv-start").disabled = !canWrite();
   $("#rv-btn").disabled = !canWrite();
 }
 
@@ -1563,6 +1585,7 @@ $("#goal-list").addEventListener("submit", e => {
   } else if (form.hasAttribute("data-gedit")) {
     const f = new FormData(form), data = { title: String(f.get("title")).trim() || g.title, sphere: f.get("sphere"),
       startDate: f.get("startDate") || g.startDate, deadline: f.get("deadline") || g.deadline };
+    if (g.kind !== "steps") data.next = String(f.get("next") || "").trim();
     if (g.kind !== "steps") {
       data.start = Number(f.get("start")) || 0; data.target = Number(f.get("target")); data.unit = String(f.get("unit")).trim();
       if (!Number.isFinite(data.target) || data.target === data.start) { notice("Цель должна отличаться от начального значения."); return; }
@@ -1650,6 +1673,432 @@ $("#gt-form").addEventListener("submit", e => {
   if (setSetting({ tasksUrl: url, tasksKey: url ? key : "" })) loadTasks(true);
 });
 
+/* ---------- следующий шаг цели ---------- */
+function nextStepOf(g) {
+  if (g.kind === "steps") { const st = (g.steps || []).find(x => !x.done); return st ? { text: st.t, goal: g.id, stepId: st.id } : null; }
+  return g.next ? { text: g.next, goal: g.id } : null;
+}
+// Варианты для полей «что делать в слоте»: следующие шаги и ближайшие этапы целей
+function stepCatalog() {
+  const out = [];
+  for (const g of goalsActive()) {
+    if (gFrac(g) >= 1) continue;
+    if (g.kind === "steps") (g.steps || []).filter(x => !x.done).slice(0, 3).forEach(x => out.push({ text: x.t, goal: g.id, stepId: x.id, gt: g.title }));
+    else if (g.next) out.push({ text: g.next, goal: g.id, gt: g.title });
+  }
+  out.forEach(x => { x.label = `${x.text} · ${x.gt}`; });
+  return out;
+}
+function resolveStep(v) {
+  v = String(v || "").trim();
+  const c = stepCatalog().find(x => x.label === v) || stepCatalog().find(x => x.text === v);
+  return c ? { text: c.text, goal: c.goal, stepId: c.stepId || null } : { text: v, goal: null, stepId: null };
+}
+function renderStepOptions() {
+  $("#step-options").innerHTML = stepCatalog().map(x => `<option value="${esc(x.label)}"></option>`).join("");
+}
+
+/* ---------- слоты ---------- */
+const sKey = (date, from) => `${date} ${from}`;
+const sess = key => S.data?.sessions?.[key] || null;
+const nowMin = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
+const fmtDur = m => { m = Math.round(m); const h = Math.floor(m / 60); return h ? `${h} ч${m % 60 ? ` ${m % 60} мин` : ""}` : `${m} мин`; };
+const goalTitle = id => (S.data?.goals || []).find(g => g.id === id)?.title || "";
+function upcomingSlots(days) {
+  const out = [], t = todayDate(), m = nowMin();
+  for (let i = 0; i < days; i++) {
+    const d = addDays(t, i), k = ymd(d);
+    for (const x of slotsOn(d)) {
+      if (i === 0 && toMin(x.to) <= m && sess(sKey(k, x.from))?.status !== "started") continue;
+      out.push({ ...x, d, date: k, key: sKey(k, x.from) });
+    }
+  }
+  return out;
+}
+function planOp(key, value) {
+  const cur = sess(key), v = String(value || "").trim();
+  if (!v) return cur && cur.status === "planned" ? { t: "session", key, data: null } : null;
+  const r = resolveStep(v);
+  if (cur && cur.text === r.text && ["planned", "started", "done"].includes(cur.status)) return null;
+  return { t: "session", key, data: { text: r.text, goal: r.goal, stepId: r.stepId, status: "planned", started: null, minutes: null, movedTo: null } };
+}
+function currentSlot() {
+  const t = todayDate(), k = ymd(t), m = nowMin();
+  const list = slotsOn(t).map(x => ({ ...x, date: k, key: sKey(k, x.from), a: toMin(x.from), z: toMin(x.to) }));
+  return list.find(x => x.z > m || sess(x.key)?.status === "started") || list.filter(x => sess(x.key)?.status === "done").pop() || null;
+}
+function renderSlotCard() {
+  const card = $("#slot-card"), x = S.data && currentSlot();
+  card.hidden = !x;
+  if (!x) return;
+  const s = sess(x.key), m = nowMin(), len = x.z - x.a, gt = s?.goal ? goalTitle(s.goal) : "";
+  const time = `${hz(x.from)}–${hz(x.to)}`, live = m >= x.a && m < x.z;
+  const head = `<span class="eyebrow">${live ? "Сейчас слот" : m < x.a ? "Сегодня слот" : "Слот"} · ${time}</span>`;
+  let html;
+  if (s?.status === "done") {
+    html = `${head}<h3>Сделано: ${esc(s.text)}</h3><p class="sg">${gt ? esc(gt) + " · " : ""}${fmtDur(s.minutes || 0)} на цель</p>`;
+  } else if (s?.status === "started") {
+    const el = Math.max(0, m - toMin(s.started));
+    html = `${head}<h3>${esc(s.text)}</h3><p class="sg">${gt ? esc(gt) + " · " : ""}идёт ${fmtDur(el)} из ${fmtDur(len)}</p>
+      <div class="sbar"><i style="width:${Math.min(100, el / len * 100)}%"></i></div>
+      <div class="row-btns"><button type="button" class="btn" data-slot-act="done">Готово</button><button type="button" class="btn ghost" data-slot-act="move">Не успел — перенести</button></div>`;
+  } else if (s?.status === "skipped") {
+    html = `${head}<h3>Слот пропущен</h3><p class="sg">${esc(s.text || "")}</p><div class="row-btns"><button type="button" class="btn ghost" data-slot-act="restore">Вернуть</button></div>`;
+  } else if (s?.status === "moved") {
+    html = `${head}<h3>Шаг перенесён</h3><p class="sg">${esc(s.text)} → ${s.movedTo ? esc(fmtShort.format(parse(s.movedTo.slice(0, 10))) + ", " + hz(s.movedTo.slice(11))) : "следующий слот"}</p>`;
+  } else if (s?.text) {
+    const canStart = m >= x.a - 30;
+    html = `${head}<h3>${esc(s.text)}</h3><p class="sg">${gt ? esc(gt) : "свой шаг"}${!canStart ? ` · начнётся в ${hz(x.from)}` : ""}</p>
+      <div class="row-btns">${canStart ? `<button type="button" class="btn" data-slot-act="start">Начать</button>` : ""}
+        ${m >= x.a ? `<button type="button" class="btn ghost" data-slot-act="done">Уже сделал</button>` : ""}
+        <button type="button" class="btn ghost" data-slot-act="move">Перенести</button>
+        <button type="button" class="btn ghost" data-slot-act="skip">Пропустить</button></div>`;
+  } else {
+    html = `${head}<h3>Шаг не выбран</h3><p class="sg">Один конкретный шаг на ${fmtDur(len)} — из целей или свой.</p>
+      <form class="inline-plan" data-slot-form><input class="field" list="step-options" placeholder="Что сделаешь в этом слоте" aria-label="Шаг для слота" autocomplete="off">
+      <button type="submit" class="btn">Поставить</button></form>`;
+  }
+  card.dataset.key = x.key;
+  card.innerHTML = html;
+}
+function slotAction(key, act) {
+  if (!canWrite()) { openConnect(); return; }
+  const s = sess(key), prev = s ? { ...s } : null, undo = () => op({ t: "session", key, data: prev });
+  const [date, from] = key.split(" "), sl = slotsOn(parse(date)).find(x => x.from === from);
+  const a = toMin(from), z = sl ? toMin(sl.to) : a + 90, m = nowMin(), today = ymd(todayDate());
+  if (act === "start") { op({ t: "session", key, data: { status: "started", started: nowHM() } }); return; }
+  if (act === "skip") { op({ t: "session", key, data: { status: "skipped" } }); toast("Слот пропущен", undo); return; }
+  if (act === "restore") { op({ t: "session", key, data: { status: "planned" } }); return; }
+  if (act === "done") {
+    const minutes = s?.status === "started" ? Math.max(1, Math.min(240, m - toMin(s.started))) : Math.max(1, Math.min(m, z) - a);
+    const ops = [{ t: "session", key, data: { status: "done", minutes } }];
+    const g = s?.goal && S.data.goals.find(x => x.id === s.goal);
+    const step = g && s.stepId && (g.steps || []).find(x => x.id === s.stepId);
+    if (step && !step.done) ops.push({ t: "goalStep", id: g.id, sid: step.id, data: { done: true, doneAt: today } });
+    op(...ops);
+    toast(step ? `Готово: этап «${step.t}» пройден` : `Готово: ${fmtDur(minutes)} на цель`, () => {
+      const back = [{ t: "session", key, data: prev }];
+      if (step && !step.done) back.push({ t: "goalStep", id: g.id, sid: step.id, data: { done: false, doneAt: null } });
+      op(...back);
+    });
+    return;
+  }
+  if (act === "move") {
+    const busy = x => { const t = sess(x.key); return !!(t?.text && ["planned", "started", "done"].includes(t.status)); };
+    const target = upcomingSlots(14).find(x => x.key > key && !busy(x));
+    if (!target) { notice("Свободных слотов впереди нет — добавь слот в настройках или выбери шаг заново."); return; }
+    const t = sess(target.key), tPrev = t ? { ...t } : null;
+    op({ t: "session", key, data: { status: "moved", movedTo: target.key } },
+       { t: "session", key: target.key, data: { text: s?.text || "", goal: s?.goal || null, stepId: s?.stepId || null, status: "planned", started: null, minutes: null, movedTo: null } });
+    toast(`Перенёс на ${fmtShort.format(target.d)}, ${hz(target.from)}`, () => op({ t: "session", key, data: prev }, { t: "session", key: target.key, data: tPrev }));
+  }
+}
+function renderSlotPlan() {
+  const ul = $("#slot-plan-list");
+  if (ul.contains(document.activeElement)) return;
+  const list = upcomingSlots(8), st = settings();
+  $("#slot-plan-aside").textContent = list.length ? `${list.filter(x => sess(x.key)?.text).length} из ${list.length} с шагом` : "";
+  if (!(st.slots || []).length) { ul.innerHTML = `<li class="empty">Свободных слотов нет. Добавь их в «Настройки → Распорядок».</li>`; return; }
+  ul.innerHTML = list.map(x => {
+    const s = sess(x.key), locked = ["done", "started", "moved"].includes(s?.status);
+    const badge = s?.status === "done" ? `<span class="st done">сделано</span>` : s?.status === "started" ? `<span class="st">идёт</span>`
+      : s?.status === "skipped" ? `<span class="st skip">пропущен</span>` : s?.status === "moved" ? `<span class="st">перенесён</span>` : "";
+    return `<li><div class="sd">${fmtShort.format(x.d)}<small>${hz(x.from)}–${hz(x.to)} ${badge}</small></div>
+      <input class="field" list="step-options" data-plan-key="${esc(x.key)}" value="${esc(locked ? s.text : s?.status === "skipped" ? "" : s?.text || "")}" placeholder="Что сделаешь" aria-label="Шаг на ${esc(fmtShort.format(x.d))}, ${hz(x.from)}" ${locked || !canWrite() ? "disabled" : ""} autocomplete="off"></li>`;
+  }).join("") || `<li class="empty">На ближайшую неделю слотов нет.</li>`;
+}
+
+/* ---------- главное на сегодня ---------- */
+function renderFocus() {
+  const tk = ymd(todayDate()), items = S.data.focus[tk] || [], ul = $("#focus-list");
+  $("#focus-count").textContent = items.length ? `${items.filter(x => x.done).length} из ${items.length}` : "";
+  ul.innerHTML = items.length ? items.map((it, i) => `<li class="${it.done ? "done" : ""}"><button type="button" class="fk" data-focus="${i}" aria-label="${it.done ? "Вернуть" : "Отметить сделанным"}: ${esc(it.t)}">${CHECK}</button>
+      <span class="ft">${esc(it.t)}${it.src ? `<small>${esc(it.src)}</small>` : ""}</span></li>`).join("")
+    : `<li class="empty">Главное на сегодня не выбрано. <button type="button" class="linkbtn" data-open-wizard="focus">Выбрать сейчас</button></li>`;
+}
+function toggleFocus(i) {
+  const tk = ymd(todayDate()), items = (S.data.focus[tk] || []).map(x => ({ ...x }));
+  const it = items[i]; if (!it) return;
+  it.done = !it.done;
+  op({ t: "focus", date: tk, items });
+  const task = it.taskId && T.data?.tasks.find(x => x.id === it.taskId);
+  if (task && (task.status === "completed") !== it.done) taskSet(task, it.done);
+}
+
+/* ---------- время на цели ---------- */
+function slotStats(from, to) {
+  const t = todayDate(), m = nowMin(), r = { avail: 0, done: 0, count: 0, doneN: 0, skipped: 0, byGoal: {} };
+  for (let d = new Date(from); d <= to && d <= t; d = addDays(d, 1)) {
+    const k = ymd(d);
+    for (const x of slotsOn(d)) {
+      const len = toMin(x.to) - toMin(x.from), s = sess(sKey(k, x.from));
+      if (k === ymd(t) && toMin(x.to) > m && s?.status !== "done") continue;
+      r.count++; r.avail += len;
+      if (s?.status === "done") { r.doneN++; r.done += s.minutes || 0; const g = s.goal || "_"; r.byGoal[g] = (r.byGoal[g] || 0) + (s.minutes || 0); }
+      if (s?.status === "skipped" || !s?.text) r.skipped++;
+    }
+  }
+  return r;
+}
+function renderFocusTime() {
+  const t = todayDate(), mon = monday(t), w = slotStats(mon, addDays(mon, 6));
+  const tile = (v, l) => `<div><b>${v}</b><span>${l}</span></div>`;
+  $("#ft-tiles").innerHTML = tile(`${fmtDur(w.done)}`, "на цели за неделю") + tile(w.avail ? pct(w.done / w.avail) : "—", "от свободного времени")
+    + tile(`${w.doneN} из ${w.count}`, "слотов с шагом") + tile(String(w.skipped), "пропущено или без шага");
+  $("#ft-aside").textContent = (settings().slots || []).length ? `свободно в неделю ${fmtDur((settings().slots || []).reduce((a, x) => a + toMin(x.to) - toMin(x.from), 0))}` : "";
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const m0 = addDays(mon, -7 * i), r = slotStats(m0, addDays(m0, 6));
+    weeks.push({ label: String(isoWeek(m0)), value: r.avail ? r.done / r.avail : null, current: i === 0,
+      tip: `${fmtDay.format(m0)} – ${fmtDay.format(addDays(m0, 6))} · ${fmtDur(r.done)} из ${fmtDur(r.avail)}` });
+  }
+  barChart($("#ft-chart"), weeks);
+  const mr = slotStats(new Date(t.getFullYear(), t.getMonth(), 1), t), ent = Object.entries(mr.byGoal).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...ent.map(e => e[1]));
+  $("#ft-goals").innerHTML = ent.length ? ent.map(([g, min]) => `<li><div class="hb-top"><span>${esc(g === "_" ? "Свои шаги" : goalTitle(g) || "Цель удалена")}</span><span class="v">${fmtDur(min)}</span></div>
+    <div class="hb"><i style="width:${min / max * 100}%"></i></div></li>`).join("") : `<li class="empty">Пока нет сделанных слотов в этом месяце.</li>`;
+}
+
+/* ---------- ритуалы ---------- */
+function ritualDue() {
+  const hr = new Date().getHours(), t = todayDate(), dw = dow(t);
+  if (dw >= 5 && !S.data.reviews[weekKey(t)]) return { kind: "weekly" };
+  if (dw === 0 && hr < 12 && !S.data.reviews[weekKey(addDays(t, -7))]) return { kind: "weekly", last: true };
+  const rd = ymd(hr < 3 ? addDays(t, -1) : t);
+  if ((hr >= 19 || hr < 3) && !S.data.rituals.evening?.[rd]) return { kind: "evening" };
+  return null;
+}
+function renderRitualCard() {
+  const card = $("#ritual-card"), r = S.data && ritualDue();
+  card.hidden = !r;
+  if (!r) return;
+  const icon = r.kind === "weekly"
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4M8.5 14.5l2 2 4-4"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="1.8" stroke-linecap="round"><path d="M15.5 4a8.5 8.5 0 1 0 4.8 12.4A7 7 0 0 1 15.5 4z"/></svg>';
+  const [title, sub] = r.kind === "weekly"
+    ? [r.last ? "Обзор прошлой недели" : "Обзор недели", "Итоги, задачи, цели и шаги на слоты — около 20 минут."]
+    : ["Вечерние 5 минут", "Отметь день, выбери главное на завтра и загляни в завтрашний день."];
+  card.innerHTML = `<div class="r-ic">${icon}</div><div class="r-t"><b>${title}</b><span>${sub}</span></div>
+    <button type="button" class="btn" data-open-wizard="${r.kind}">Начать</button>`;
+}
+
+/* ---------- окно ритуала ---------- */
+const W = { kind: null, i: 0, st: {} };
+function wizHabits() {
+  const k = W.st.dayK;
+  return `<p class="note" style="margin:0">Отметь, что получилось ${k === ymd(todayDate()) ? "сегодня" : "вчера"}.</p>
+    <ul class="today card">${active().map(h => `<li><button type="button" class="hab" aria-pressed="${isDone(k, h.id)}" data-wh="${esc(h.id)}">
+      <span class="tick">${CHECK}</span><span class="hab-main"><span class="hab-name">${esc(h.name)}</span>
+      <span class="hab-meta">${weekCount(h, monday(parse(k)))} из ${h.target || 1} за неделю</span></span></button></li>`).join("") || '<li class="empty">Привычек нет.</li>'}</ul>`;
+}
+function wizFocus() {
+  const tgt = W.st.target, isT = tgt === ymd(todayDate()), f = W.st.focus, full = f.length >= 3;
+  const has = c => f.some(x => (c.taskId && x.taskId === c.taskId) || x.t === c.t);
+  const cands = [];
+  stepCatalog().forEach(c => cands.push({ t: c.text, src: c.gt, goal: c.goal, stepId: c.stepId || null, kind: "Шаги целей" }));
+  if (T.data) {
+    const open = T.data.tasks.filter(x => x.status !== "completed");
+    const pr = x => !x.due ? 3 : x.due < tgt ? 0 : x.due === tgt ? 1 : 2;
+    open.filter(x => !x.due || x.due <= addDaysK(tgt, 3)).sort((a, b) => pr(a) - pr(b)).slice(0, 12)
+      .forEach(x => cands.push({ t: x.title, src: `${x.list}${x.due ? ` · срок ${fmtDM.format(parse(x.due))}` : ""}`, taskId: x.id, listId: x.listId, kind: "Google Задачи" }));
+  }
+  W.cands = cands;
+  const groups = [...new Set(cands.map(c => c.kind))];
+  return `<p class="note" style="margin:0">Не больше трёх дел на ${isT ? "сегодня" : "завтра"}. Остальное подождёт.</p>
+    <ol class="chosen">${f.length ? f.map((it, i) => `<li><span>${i + 1}. ${esc(it.t)}</span><button type="button" class="xbtn" data-fdel="${i}" aria-label="Убрать">×</button></li>`).join("")
+      : '<li class="empty" style="background:none;padding:0">Пока ничего не выбрано.</li>'}</ol>
+    ${groups.map(gk => `<div class="pick"><p class="pick-h">${gk}</p>${cands.map((c, i) => c.kind !== gk ? "" :
+      `<button type="button" class="pi" data-fadd="${i}" ${full || has(c) ? "disabled" : ""}><span>${esc(c.t)}<small>${esc(c.src || "")}</small></span><span class="plus">+</span></button>`).join("")}</div>`).join("")}
+    ${!T.data ? `<p class="note" style="margin:0">Google Задачи не подключены — дела из них появятся здесь после подключения.</p>` : ""}
+    <div class="pick"><p class="pick-h">Своё</p><form class="inline-plan" data-fown><input class="field" id="wf-own" placeholder="Например: позвонить в банк" autocomplete="off" ${full ? "disabled" : ""}><button type="submit" class="btn ghost" ${full ? "disabled" : ""}>Добавить</button></form></div>`;
+}
+const addDaysK = (k, n) => ymd(addDays(parse(k), n));
+function wizSlotInputs(list) {
+  return list.length ? `<ul class="splan card">${list.map(x => { const s = sess(x.key), v = W.st.plans[x.key] ?? (["skipped", "moved"].includes(s?.status) ? "" : s?.text || "");
+    return `<li><div class="sd">${fmtShort.format(x.d)}<small>${hz(x.from)}–${hz(x.to)}</small></div>
+      <input class="field" list="step-options" data-wplan="${esc(x.key)}" value="${esc(v)}" placeholder="Что сделаешь" autocomplete="off" ${s?.status === "done" ? "disabled" : ""}></li>`; }).join("")}</ul>`
+    : `<p class="note" style="margin:0">Свободных слотов нет. Их можно задать в «Настройки → Распорядок».</p>`;
+}
+function wizTomorrow() {
+  const tgt = W.st.target, d = parse(tgt), f = forecast(tgt), rec = recFor(tgt), st = settings();
+  const busy = (st.busyDays || []).includes(dow(d)) && st.busyLabel;
+  const due = T.data ? T.data.tasks.filter(x => x.status !== "completed" && x.due === tgt).length : null;
+  const lines = [
+    f ? `${kidName()} проснётся около <b>${hm(f.pred)}</b> (${hm(f.lo)}–${hm(f.hi)})` : `Прогноз подъёма ${kidGen()} пока не готов`,
+    rec != null ? `Тебе вставать в <b>${hm(rec)}</b>` : "",
+    busy ? `Вечер: ${esc(st.busyLabel)}` : "",
+    due != null ? `Задач с датой на этот день: ${due}` : "",
+  ].filter(Boolean);
+  return `<div class="w-line">${lines.map(x => `<span>${x}</span>`).join("")}</div>
+    <p class="pick-h">Слоты — один шаг на каждый</p>${wizSlotInputs(slotsOn(d).map(x => ({ ...x, d, date: tgt, key: sKey(tgt, x.from) })))}`;
+}
+function wizWeekSummary() {
+  const mon = W.st.mon, sun = addDays(mon, 6), ns = normStats(mon, sun), sl = slotStats(mon, sun);
+  const wakes = []; for (let d = new Date(mon); d <= sun; d = addDays(d, 1)) { const w = wakeOf(ymd(d)); if (w != null) wakes.push(w); }
+  const tg = Object.keys(S.data.together).filter(k => k >= ymd(mon) && k <= ymd(sun)).length;
+  const tile = (v, l) => `<div><b>${v}</b><span>${l}</span></div>`;
+  const habits = ns.per.map(r => { const c = weekCount(r.h, mon); return `<span>${esc(r.h.name)}: ${c} из ${r.h.target || 1}${c >= (r.h.target || 1) ? " ✓" : ""}</span>`; }).join("");
+  const goals = goalsActive().map(g => { const st = gStatus(g); return `<span>${esc(g.title)} — ${st.text}${g.kind === "steps" ? `, ${(g.steps || []).filter(x => x.done).length} из ${(g.steps || []).length} этапов` : `, ${fmtN.format(gCur(g))}${g.unit ? " " + esc(g.unit) : ""}`}</span>`; }).join("");
+  return `<p class="note" style="margin:0">${fmtDay.format(mon)} – ${fmtDay.format(sun)}</p>
+    <div class="w-stat">${tile(pct(ns.pct), "нормы привычек")}${tile(fmtDur(sl.done), "в слотах на цели")}${tile(`${sl.doneN} из ${sl.count}`, "слотов с шагом")}${tile(tg ? String(tg) : "0", "раз вдвоём")}</div>
+    ${wakes.length ? `<div class="w-line"><span>${kidName()} вставал обычно в <b>${hm(median(wakes))}</b> (${wakes.length} ${plural(wakes.length, "утро", "утра", "утр")})</span></div>` : ""}
+    ${habits ? `<div class="w-line"><b>Привычки</b>${habits}</div>` : ""}
+    ${goals ? `<div class="w-line"><b>Цели</b>${goals}</div>` : ""}
+    <p class="note" style="margin:0">Что получилось лучше всего и что мешало? Ответь себе одной фразой — это и есть вывод недели.</p>`;
+}
+function wizTasks() {
+  if (!T.data) return `<div class="w-line"><b>Google Задачи не подключены</b><span>Открой свой список задач и разбери каждую: сделать сразу, поставить дату или удалить.</span></div>
+    <a class="btn ghost" href="https://tasks.google.com/" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Открыть Google Задачи</a>`;
+  const tk = ymd(todayDate()), open = T.data.tasks.filter(x => x.status !== "completed");
+  const overdue = open.filter(x => x.due && x.due < tk), undated = open.filter(x => !x.due), stale = open.filter(x => x.updated && Date.now() - Date.parse(x.updated) > 30 * 864e5);
+  const tile = (v, l) => `<div><b>${v}</b><span>${l}</span></div>`;
+  return `<div class="w-stat">${tile(open.length, "открыто")}${tile(overdue.length, "просрочено")}${tile(undated.length, "без даты")}${tile(stale.length, "висит дольше месяца")}</div>
+    ${overdue.length ? `<div class="w-line"><b>Просрочено</b>${overdue.slice(0, 6).map(x => `<span>${esc(x.title)} · ${fmtDM.format(parse(x.due))}</span>`).join("")}</div>` : ""}
+    ${stale.length ? `<div class="w-line"><b>Висит дольше месяца</b>${stale.slice(0, 6).map(x => `<span>${esc(x.title)}</span>`).join("")}</div>` : ""}
+    <p class="note" style="margin:0">Правило: каждую задачу — сделать сейчас, поставить дату или удалить. Третьего варианта нет.</p>
+    <a class="btn ghost" href="https://tasks.google.com/" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Открыть Google Задачи</a>`;
+}
+function wizGoals() {
+  const gs = goalsActive();
+  if (!gs.length) return `<p class="note" style="margin:0">Стратегических целей пока нет. Их можно добавить во вкладке «Цели» — тогда здесь можно будет обновлять прогресс и выбирать следующий шаг.</p>`;
+  return gs.map(g => {
+    const st = gStatus(g), v = W.st.goals[g.id] || {};
+    if (g.kind === "steps") {
+      const nx = (g.steps || []).find(x => !x.done);
+      return `<div class="w-line"><b>${esc(g.title)} <span class="chip ${st.cls}">${st.text}</span></b>
+        ${nx ? `<label style="display:flex;gap:8px;align-items:center;font-size:14.5px"><input type="checkbox" data-wg-step="${esc(g.id)}:${esc(nx.id)}" ${v.stepDone ? "checked" : ""}> Этап «${esc(nx.t)}» пройден</label>` : "<span>Все этапы пройдены.</span>"}</div>`;
+    }
+    return `<div class="w-line"><b>${esc(g.title)} <span class="chip ${st.cls}">${st.text}</span></b>
+      <div class="fgrid"><label>Сейчас${g.unit ? `, ${esc(g.unit)}` : ""} <input class="field" type="number" step="any" data-wg-val="${esc(g.id)}" value="${esc(v.val ?? gCur(g))}"></label>
+      <label class="wide">Следующий шаг <input class="field" data-wg-next="${esc(g.id)}" value="${esc(v.next ?? g.next ?? "")}" placeholder="Конкретное действие на один слот" maxlength="100"></label></div></div>`;
+  }).join("");
+}
+const WIZ = {
+  evening: { title: "Вечерние 5 минут", steps: [["Привычки за день", wizHabits], ["Главное на завтра", wizFocus], ["Завтра", wizTomorrow]] },
+  focus: { title: "Главное на сегодня", steps: [["Главное на сегодня", wizFocus]] },
+  weekly: { title: "Обзор недели", steps: [["Итоги недели", wizWeekSummary], ["Задачи", wizTasks], ["Цели", wizGoals], ["Слоты на неделю", () => wizSlotInputs(upcomingSlots(8))]] },
+};
+function openWizard(kind) {
+  if (!canWrite()) { openConnect(); return; }
+  const hr = new Date().getHours(), t = todayDate();
+  W.kind = kind; W.i = 0;
+  if (kind === "evening") {
+    const dayK = ymd(hr < 3 ? addDays(t, -1) : t), target = ymd(hr < 3 ? t : addDays(t, 1));
+    W.st = { dayK, target, focus: (S.data.focus[target] || []).map(x => ({ ...x })), plans: {} };
+  } else if (kind === "focus") {
+    const tk = ymd(t);
+    W.st = { dayK: tk, target: tk, focus: (S.data.focus[tk] || []).map(x => ({ ...x })), plans: {} };
+  } else {
+    const last = dow(t) === 0 && hr < 12 && !S.data.reviews[weekKey(addDays(t, -7))];
+    const mon = monday(last ? addDays(t, -7) : t);
+    W.st = { mon, week: weekKey(mon), plans: {}, goals: {} };
+  }
+  renderWizard();
+  $("#sheet").hidden = false; document.body.classList.add("noscroll");
+  loadTasks();
+}
+function closeWizard() { $("#sheet").hidden = true; document.body.classList.remove("noscroll"); W.kind = null; }
+function collectWizard() {
+  document.querySelectorAll("#sheet-body [data-wplan]").forEach(el => { if (!el.disabled) W.st.plans[el.dataset.wplan] = el.value; });
+  document.querySelectorAll("#sheet-body [data-wg-val]").forEach(el => { (W.st.goals[el.dataset.wgVal] ||= {}).val = el.value; });
+  document.querySelectorAll("#sheet-body [data-wg-next]").forEach(el => { (W.st.goals[el.dataset.wgNext] ||= {}).next = el.value; });
+  document.querySelectorAll("#sheet-body [data-wg-step]").forEach(el => { (W.st.goals[el.dataset.wgStep.split(":")[0]] ||= {}).stepDone = el.checked; });
+}
+function renderWizard() {
+  if (!W.kind) return;
+  const def = WIZ[W.kind], steps = def.steps, [title, fn] = steps[W.i];
+  $("#sheet-step").textContent = steps.length > 1 ? `${def.title} · шаг ${W.i + 1} из ${steps.length}` : def.title;
+  $("#sheet-title").textContent = title;
+  $("#sheet-dots").innerHTML = steps.length > 1 ? steps.map((_, i) => `<i class="${i <= W.i ? "on" : ""}"></i>`).join("") : "";
+  $("#sheet-body").innerHTML = fn();
+  $("#sheet-back").style.visibility = W.i ? "visible" : "hidden";
+  $("#sheet-next").textContent = W.i === steps.length - 1 ? "Готово" : "Дальше";
+}
+async function taskDue(task, date) {
+  const st = settings();
+  const r = await fetch(st.tasksUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ key: st.tasksKey, action: "due", listId: task.listId, id: task.id, due: date }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  task.due = date; lsSet(LS.tasks, T.data);
+}
+function finishWizard() {
+  collectWizard();
+  const ops = [], kind = W.kind, st = W.st, tk = ymd(todayDate());
+  for (const [key, v] of Object.entries(st.plans)) { const o = planOp(key, v); if (o) ops.push(o); }
+  let msg = "";
+  if (kind === "evening" || kind === "focus") {
+    const items = st.focus.map(x => ({ t: x.t, src: x.src || "", done: !!x.done, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null }));
+    ops.push({ t: "focus", date: st.target, items });
+    if (kind === "evening") ops.push({ t: "ritual", kind: "evening", date: st.dayK, time: nowHM() });
+    msg = items.length ? `Главное на ${st.target === tk ? "сегодня" : "завтра"}: ${items.length}` : "Готово";
+    if (tasksUrl() && T.data) {
+      const need = items.map(x => x.taskId && T.data.tasks.find(t => t.id === x.taskId)).filter(t => t && t.due !== st.target);
+      Promise.all(need.map(t => taskDue(t, st.target))).then(() => { if (need.length) renderPlan(); })
+        .catch(() => notice("Дату в Google Задачах поставить не удалось. Обнови скрипт google-tasks.gs и сделай новую версию развёртывания — см. «Настройки → Google Задачи»."));
+    }
+  } else {
+    for (const g of goalsActive()) {
+      const v = st.goals[g.id]; if (!v) continue;
+      if (g.kind === "steps") {
+        const nx = (g.steps || []).find(x => !x.done);
+        if (v.stepDone && nx) ops.push({ t: "goalStep", id: g.id, sid: nx.id, data: { done: true, doneAt: tk } });
+      } else {
+        const num = Number(String(v.val ?? "").replace(",", "."));
+        if (v.val !== undefined && v.val !== "" && Number.isFinite(num) && num !== gCur(g)) ops.push({ t: "goalLog", id: g.id, d: tk, v: num });
+        if (v.next !== undefined && v.next.trim() !== (g.next || "")) ops.push({ t: "goal", id: g.id, data: { next: v.next.trim() } });
+      }
+    }
+    ops.push({ t: "review", week: st.week, date: tk });
+  }
+  // планы слотов, выбранные из шагов целей, обновляем после смены следующих шагов
+  op(...ops);
+  if (kind === "weekly") msg = `Обзор недели проведён. Серия: ${reviewStreak()} ${plural(reviewStreak(), "неделя", "недели", "недель")}`;
+  closeWizard();
+  toast(msg);
+}
+$("#sheet-next").addEventListener("click", () => {
+  collectWizard();
+  if (W.i < WIZ[W.kind].steps.length - 1) { W.i++; renderWizard(); $("#sheet-body").scrollTop = 0; } else finishWizard();
+});
+$("#sheet-back").addEventListener("click", () => { collectWizard(); if (W.i) { W.i--; renderWizard(); } });
+$("#sheet-close").addEventListener("click", closeWizard);
+$("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeWizard(); });
+addEventListener("keydown", e => { if (e.key === "Escape" && W.kind) closeWizard(); });
+$("#sheet-body").addEventListener("click", e => {
+  const h = e.target.closest("[data-wh]");
+  if (h) { const k = W.st.dayK; op({ t: "check", date: k, hid: h.dataset.wh, val: !isDone(k, h.dataset.wh) }); renderWizard(); return; }
+  const a = e.target.closest("[data-fadd]");
+  if (a && !a.disabled) { const c = W.cands[Number(a.dataset.fadd)]; if (c && W.st.focus.length < 3) { W.st.focus.push({ t: c.t, src: c.src, taskId: c.taskId || null, listId: c.listId || null, goal: c.goal || null }); collectWizard(); renderWizard(); } return; }
+  const d = e.target.closest("[data-fdel]");
+  if (d) { W.st.focus.splice(Number(d.dataset.fdel), 1); collectWizard(); renderWizard(); }
+});
+$("#sheet-body").addEventListener("submit", e => {
+  e.preventDefault();
+  const inp = e.target.querySelector("#wf-own"), v = inp?.value.trim();
+  if (v && W.st.focus.length < 3) { W.st.focus.push({ t: v, src: "" }); collectWizard(); renderWizard(); }
+});
+document.addEventListener("click", e => {
+  const w = e.target.closest("[data-open-wizard]");
+  if (w) { openWizard(w.dataset.openWizard); return; }
+  const f = e.target.closest("[data-focus]");
+  if (f) { toggleFocus(Number(f.dataset.focus)); return; }
+  const sa = e.target.closest("[data-slot-act]");
+  if (sa) { const key = $("#slot-card").dataset.key; if (key) slotAction(key, sa.dataset.slotAct); }
+});
+$("#slot-card").addEventListener("submit", e => {
+  e.preventDefault();
+  const key = $("#slot-card").dataset.key, o = planOp(key, e.target.querySelector("input").value);
+  if (o) op(o);
+});
+$("#slot-plan-list").addEventListener("change", e => {
+  const el = e.target.closest("[data-plan-key]");
+  if (!el) return;
+  const o = planOp(el.dataset.planKey, el.value);
+  el.blur();
+  if (o) op(o);
+});
+$("#rv-start").addEventListener("click", () => openWizard("weekly"));
+
 /* ---------- тема ---------- */
 function themeChoice() { try { const t = localStorage.getItem("habits.theme"); return t === "light" || t === "dark" ? t : "auto"; } catch { return "auto"; } }
 function applyTheme(t) {
@@ -1684,7 +2133,7 @@ setInterval(() => {
   // Раз в минуту: смена дня и полдень (после 12:00 прогноз переключается на завтра)
   const now = new Date(), key = ymd(todayDate()) + (now.getHours() < 12 ? "am" : "pm");
   if (key !== lastKey) { lastKey = key; S.memo = null; render(); }
-  else if (S.data) { renderKid(); renderPlan(); }
+  else if (S.data) { renderKid(); renderPlan(); renderSlotCard(); renderRitualCard(); }
 }, 60000);
 let lastW = innerWidth;
 addEventListener("resize", () => {
