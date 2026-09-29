@@ -410,6 +410,23 @@ function kidTarget() {
   if (wakeOf(tk) == null && new Date().getHours() < 12) return tk;
   return ymd(addDays(t, 1));
 }
+// Какие кнопки сна показывать сейчас. night0 — «текущая» ночь для плашек и редактора:
+// днём и утром это прошлая ночь, с 17:00 — сегодняшняя.
+function kidButtons() {
+  const hr = new Date().getHours(), t = todayDate(), tk = ymd(t), nd = bedDateNow();
+  const night0 = hr >= 17 ? tk : ymd(addDays(t, -1));
+  const kd = S.data?.kid || {}, bed = bedOf(nd), wake = wakeOf(tk), me = meWakeOf(tk);
+  const morning = hr >= 4 && hr < 14;
+  return {
+    wake: morning && wake == null,
+    me: hr >= 3 && hr < 14 && me == null,
+    bed0: (hr >= 17 || hr < 4) && bed == null,
+    night: (hr >= 17 || hr < 10) && bed != null && !(hr < 14 && wake != null),
+    bed, nights: kd[nd]?.nights || [], night0,
+    bedDone: bedOf(night0), nightsDone: kd[night0]?.nights || [],
+    wakeDone: hr >= 17 ? null : wake, meDone: hr >= 17 ? null : me,
+  };
+}
 const bedDateNow = () => { const now = new Date(); return ymd(addDays(todayDate(), now.getHours() < 12 ? -1 : 0)); };
 function countWakes() { return Object.values(S.data?.kid || {}).filter(v => v.wake).length; }
 
@@ -575,26 +592,28 @@ function renderKid() {
     $("#fc-basis").textContent = basis;
     $("#kid-aside").textContent = "";
   }
-  // Кнопки
-  const hr = new Date().getHours(), night = hr < 4, wakeOk = hr >= 4 && hr < 14, nightOk = hr >= 17 || hr < 9, meOk = hr >= 3 && hr < 14;
-  const nowT = hm(toMin(nowHM()));
-  const w = S.data.kid[tk]?.wake, bd = bedDateNow(), b = S.data.kid[bd]?.bed, nts = S.data.kid[bd]?.nights || [];
+  // Кнопки: видна только та, что имеет смысл сейчас, и ничего не перезаписывает
+  const K = kidButtons(), nowT = hm(toMin(nowHM()));
   $("#kid-wake-l").textContent = `${name} проснулся`;
-  $("#kid-wake-s").textContent = night ? "сейчас ночь: утренний подъём отмечается с 4:00"
-    : !wakeOk ? (w ? `сегодня в ${hm(toMin(w))}` : "отмечается утром")
-    : w ? `сегодня в ${hm(toMin(w))} · нажми, чтобы заменить на ${nowT}` : `запишу ${nowT}`;
+  $("#kid-wake-s").textContent = `запишу ${nowT}${fc && isToday ? ` · прогноз ${hm(fc.pred)}` : ""}`;
   $("#kid-sleep-l").textContent = `${name} уснул`;
-  $("#kid-sleep-s").textContent = b ? `${bd === tk ? "сегодня" : "вчера"} в ${hm(toMin(b))} · нажми, чтобы заменить` : `запишу ${nowT} как отбой`;
+  $("#kid-sleep-s").textContent = `запишу ${nowT} как отбой`;
   $("#kid-night-l").textContent = `${name} проснулся ночью`;
-  $("#kid-night-s").textContent = !nightOk ? "работает с 17:00 до 9:00"
-    : nts.length ? `этой ночью: ${nts.map(x => hm(toMin(x))).join(", ")} · добавлю ${nowT}` : `запишу ${nowT}`;
-  const mw = S.data.me[tk]?.wake, rec = recFor(tk);
-  $("#me-wake-s").textContent = mw ? `сегодня в ${hm(toMin(mw))}${rec != null ? ` · ${diffText(toMin(mw) - rec)}` : ""}`
-    : !meOk ? "отмечается утром" : rec != null ? `план ${hm(rec)} · запишу ${nowT}` : `запишу ${nowT}`;
-  $("#kid-wake").disabled = !canWrite() || !wakeOk;
-  $("#kid-sleep").disabled = !canWrite();
-  $("#kid-night").disabled = !canWrite() || !nightOk;
-  $("#me-wake").disabled = !canWrite() || !meOk;
+  $("#kid-night-s").textContent = `уснул в ${hm(K.bed)}${K.nights.length ? ` · уже: ${K.nights.map(x => hm(toMin(x))).join(", ")}` : ""} · запишу ${nowT}`;
+  const rec = recFor(tk);
+  $("#me-wake-s").textContent = rec != null ? `план ${hm(rec)} · запишу ${nowT}` : `запишу ${nowT}`;
+  $("#kid-wake").hidden = !K.wake; $("#kid-sleep").hidden = !K.bed0; $("#kid-night").hidden = !K.night; $("#me-wake").hidden = !K.me;
+  [$("#kid-wake"), $("#kid-sleep"), $("#kid-night"), $("#me-wake")].forEach(el => { el.disabled = !canWrite(); });
+  // Уже отмеченное — плашками; нажатие открывает редактор этой ночи
+  const chip = (color, text) => `<button type="button" class="chip-done" data-fix="${K.night0}"><i style="background:${color}"></i>${esc(text)}</button>`;
+  const chips = [];
+  if (K.bedDone != null) chips.push(chip("var(--blue)", `уснул в ${hm(K.bedDone)}`));
+  if (K.nightsDone.length) chips.push(chip("var(--violet)", `ночью: ${K.nightsDone.map(x => hm(toMin(x))).join(", ")}`));
+  if (K.wakeDone != null) chips.push(chip("var(--amber)", `проснулся в ${hm(K.wakeDone)}`));
+  if (K.meDone != null) chips.push(chip("var(--teal)", `ты встал в ${hm(K.meDone)}`));
+  if (chips.length) chips.push(`<button type="button" class="chip-done fix" data-fix="${K.night0}">Исправить</button>`);
+  else if (!K.wake && !K.bed0 && !K.night && !K.me) chips.push(`<span class="chip-note">Кнопки сна появятся в 17:00.</span>`);
+  $("#kid-done").innerHTML = chips.join("");
   $("#lg-kid-wake").textContent = `${name} проснулся`;
   $("#lg-kid").textContent = `подъём ${kidGen()}`;
   renderKidCal(fc, target);
@@ -759,9 +778,28 @@ function renderKidSettings() {
   if ($("#ks-min") !== focus) $("#ks-min").innerHTML = [10, 15, 20, 30, 45, 60, 90].map(n => `<option value="${n}" ${n === (st.morningMinutes || 30) ? "selected" : ""}>${n} мин</option>`).join("");
   if ($("#ks-habit") !== focus) $("#ks-habit").innerHTML = `<option value="">не выбрана</option>` +
     active().map(h => `<option value="${esc(h.id)}" ${h.id === st.morningHabit ? "selected" : ""}>${esc(h.name)}</option>`).join("");
-  if (!$("#kf-date").value) fillKidForm(bedDateNow());
+  if (!$("#kf-date").value) fillKidForm(kidButtons().night0);
+  else if (!$("#kid-form").contains(document.activeElement)) renderNightList();
 }
 // Форма описывает одну ночь: отбой и пробуждения — в день k, подъёмы — утром следующего дня
+function renderNightList() {
+  const t = todayDate(), hr = new Date().getHours(), sel = $("#kf-date").value, rows = [];
+  for (let i = hr >= 17 ? 0 : 1; i <= 7; i++) {
+    const d = addDays(t, -i), k = ymd(d), next = ymd(addDays(d, 1)), v = S.data.kid[k] || {};
+    const w = wakeOf(next), me = meWakeOf(next), n = v.nights || [];
+    const parts = [v.bed ? `уснул ${hm(toMin(v.bed))}` : "отбой —",
+      n.length ? `ночью ${n.map(x => hm(toMin(x))).join(", ")}` : "",
+      w != null ? `проснулся ${hm(w)}` : next <= ymd(t) ? "подъём —" : "", me != null ? `ты ${hm(me)}` : ""].filter(Boolean);
+    rows.push(`<li><button type="button" class="night-row" data-night="${k}" aria-current="${k === sel}"><b>с ${fmtShort.format(d)} на ${fmtShort.format(addDays(d, 1))}</b><span>${esc(parts.join(" · "))}</span></button></li>`);
+  }
+  $("#night-list").innerHTML = rows.join("");
+}
+function openNight(k) {
+  if (currentView() !== "settings") location.hash = "#settings";
+  $("#kid-edit").open = true;
+  fillKidForm(k);
+  setTimeout(() => $("#kid-form").scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+}
 function fillKidForm(k) {
   const v = S.data?.kid[k] || {}, next = ymd(addDays(parse(k), 1));
   $("#kf-date").value = k; $("#kf-date").max = ymd(todayDate());
@@ -771,6 +809,7 @@ function fillKidForm(k) {
   $("#kf-wake").value = S.data?.kid[next]?.wake || "";
   $("#kf-me").value = S.data?.me[next]?.wake || "";
   $("#kf-wake").disabled = $("#kf-me").disabled = next > ymd(todayDate());
+  if (S.data) renderNightList();
 }
 
 function renderWeek() {
@@ -1356,8 +1395,9 @@ document.addEventListener("click", e => {
 function kidMark(kind) {
   if (!canWrite()) { openConnect(); return; }
   const now = nowHM(), t = hm(toMin(now)), name = kidName(), hr = new Date().getHours(), tk = ymd(todayDate());
+  const K = kidButtons();
+  if ((kind === "wake" && !K.wake) || (kind === "bed" && !K.bed0) || (kind === "night" && !K.night) || (kind === "me" && !K.me)) return;
   if (kind === "wake") {
-    if (hr < 4 || hr >= 14) return;
     const prev = S.data.kid[tk]?.wake ?? null;
     op({ t: "kid", date: tk, data: { wake: now } });
     toast(`${name} проснулся в ${t}`, () => op({ t: "kid", date: tk, data: { wake: prev } }));
@@ -1376,6 +1416,8 @@ function kidMark(kind) {
   }
 }
 $("#kid-wake").addEventListener("click", () => kidMark("wake"));
+$("#kid-done").addEventListener("click", e => { const b = e.target.closest("[data-fix]"); if (b) openNight(b.dataset.fix); });
+$("#night-list").addEventListener("click", e => { const b = e.target.closest("[data-night]"); if (b) { fillKidForm(b.dataset.night); $("#kid-form").scrollIntoView({ behavior: "smooth", block: "center" }); } });
 $("#kid-sleep").addEventListener("click", () => kidMark("bed"));
 $("#kid-night").addEventListener("click", () => kidMark("night"));
 $("#me-wake").addEventListener("click", () => kidMark("me"));

@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -60,6 +60,7 @@
             <span><b>Я встал</b><span id="me-wake-s"></span></span>
           </button>
         </div>
+        <div class="done-chips" id="kid-done"></div>
       </section>
 
       <section class="card" id="day">
@@ -137,29 +138,6 @@
             <div class="chart" id="kw-chart"></div>
           </figure>
         </div>
-      </section>
-
-      <section class="card span2">
-        <details class="sub" id="kid-edit">
-          <summary>Внести вручную и настройки</summary>
-          <form class="fgrid" id="kid-form">
-            <label for="kf-date">Ночь с <input class="field" type="date" id="kf-date"></label>
-            <p class="kf-hint" id="kf-hint"></p>
-            <label for="kf-bed">Уснул вечером <input class="field" type="time" id="kf-bed"></label>
-            <label for="kf-nights">Ночью просыпался <input class="field" type="text" id="kf-nights" placeholder="23:40, 2:10" inputmode="numeric"></label>
-            <label for="kf-wake">Проснулся утром <input class="field" type="time" id="kf-wake"></label>
-            <label for="kf-me">Я встал утром <input class="field" type="time" id="kf-me"></label>
-            <button class="btn" type="submit" id="kf-save">Сохранить</button>
-            <button class="btn ghost" type="button" id="kf-clear">Очистить ночь</button>
-          </form>
-          <p class="note">Всё в форме относится к одной ночи: отбой — вечером выбранного дня, подъёмы — утром следующего. До полудня здесь открыта прошлая ночь.</p>
-          <div class="fgrid">
-            <label for="ks-name">Имя <input class="field" type="text" id="ks-name" maxlength="30" placeholder="Марк"></label>
-            <label for="ks-gen">Утро кого? <input class="field" type="text" id="ks-gen" maxlength="30" placeholder="Марка"></label>
-            <label for="ks-min">Время на утро <select class="field" id="ks-min"></select></label>
-            <label for="ks-habit">Утренняя привычка <select class="field" id="ks-habit"></select></label>
-          </div>
-        </details>
       </section>
     </div>
 
@@ -317,6 +295,33 @@
       </section>
 
       <section class="card span2">
+        <details class="sub" id="kid-edit">
+          <summary>Сон и подъёмы</summary>
+          <p class="note">Отбой — вечером выбранного дня, подъёмы — утром следующего. Другую ночь выбери в списке ниже.</p>
+          <form class="fgrid" id="kid-form">
+            <label for="kf-date">Ночь с <input class="field" type="date" id="kf-date"></label>
+            <p class="kf-hint" id="kf-hint"></p>
+            <label for="kf-bed">Уснул вечером <input class="field" type="time" id="kf-bed"></label>
+            <label for="kf-nights">Ночью просыпался <input class="field" type="text" id="kf-nights" placeholder="23:40, 2:10" inputmode="numeric"></label>
+            <label for="kf-wake">Проснулся утром <input class="field" type="time" id="kf-wake"></label>
+            <label for="kf-me">Я встал утром <input class="field" type="time" id="kf-me"></label>
+            <button class="btn" type="submit" id="kf-save">Сохранить</button>
+            <button class="btn ghost" type="button" id="kf-clear">Очистить ночь</button>
+          </form>
+          <p class="note">Пустое поле удаляет запись. Ночные пробуждения — через запятую.</p>
+          <h3 class="h3 top">Другие ночи</h3>
+          <ul class="nights" id="night-list"></ul>
+          <h3 class="h3 top">Утро</h3>
+          <div class="fgrid">
+            <label for="ks-name">Имя <input class="field" type="text" id="ks-name" maxlength="30" placeholder="Марк"></label>
+            <label for="ks-gen">Утро кого? <input class="field" type="text" id="ks-gen" maxlength="30" placeholder="Марка"></label>
+            <label for="ks-min">Время на утро <select class="field" id="ks-min"></select></label>
+            <label for="ks-habit">Утренняя привычка <select class="field" id="ks-habit"></select></label>
+          </div>
+        </details>
+      </section>
+
+      <section class="card span2">
         <details class="sub">
           <summary>Google Задачи</summary>
           <p class="state" id="gt-state"></p>
@@ -373,6 +378,6 @@
 <nav class="tabbar" aria-label="Разделы" data-nav></nav>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
