@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -50,18 +50,22 @@
           <button type="button" class="kbtn kid" id="kid-wake">
             <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="19" r="6" fill="var(--amber)"/><path d="M16 6v4M6.5 10l2.8 2.8M25.5 10l-2.8 2.8M3 25h26" stroke="var(--amber)" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>
             <span><b id="kid-wake-l">Проснулся</b><span id="kid-wake-s"></span></span>
+          <span class="kgo" aria-hidden="true">Отметить</span>
           </button>
           <button type="button" class="kbtn sleep" id="kid-sleep">
             <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20.5 5.5a11 11 0 1 0 6 16.2A9 9 0 0 1 20.5 5.5z" fill="var(--blue)"/></svg>
             <span><b id="kid-sleep-l">Уснул</b><span id="kid-sleep-s"></span></span>
+          <span class="kgo" aria-hidden="true">Отметить</span>
           </button>
           <button type="button" class="kbtn night" id="kid-night">
             <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20.5 5.5a11 11 0 1 0 6 16.2A9 9 0 0 1 20.5 5.5z" fill="none" stroke="var(--violet)" stroke-width="2.4"/><circle cx="24" cy="9" r="2.4" fill="var(--amber)"/></svg>
             <span><b id="kid-night-l">Проснулся ночью</b><span id="kid-night-s"></span></span>
+          <span class="kgo" aria-hidden="true">Отметить</span>
           </button>
           <button type="button" class="kbtn me" id="me-wake">
             <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="14" width="22" height="4" rx="2" fill="var(--teal)"/><path d="M16 5v5M9 8l2 3M23 8l-2 3" stroke="var(--teal)" stroke-width="2.4" stroke-linecap="round"/></svg>
-            <span><b>Я встал</b><span id="me-wake-s"></span></span>
+            <span><b id="me-wake-l">Я встал</b><span id="me-wake-s"></span></span>
+          <span class="kgo" aria-hidden="true">Отметить</span>
           </button>
         </div>
         <div class="done-chips" id="kid-done"></div>
@@ -438,6 +442,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

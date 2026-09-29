@@ -155,7 +155,7 @@ ol.steps code { font-family:ui-monospace,Menlo,monospace; font-size:13px; backgr
 
 /* ---------- кнопки утра ---------- */
 .kid-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.kbtn { display:grid; grid-template-columns:30px 1fr; gap:10px; align-items:center; text-align:left; padding:13px 12px;
+.kbtn { display:grid; grid-template-columns:30px 1fr auto; gap:10px; align-items:center; text-align:left; padding:13px 12px;
   border:0; border-radius:18px; -webkit-tap-highlight-color:transparent; transition:transform .1s; min-height:74px; }
 .kbtn:active { transform:scale(.98); }
 .kbtn svg { width:28px; height:28px; }
@@ -574,3 +574,7 @@ body.noscroll { overflow:hidden; }
   .sheet-in { border-radius:24px; max-height:86vh; }
 }
 @media (max-width:420px) { .splan li { grid-template-columns:1fr; gap:4px; } }
+
+.kgo { font-size:12.5px; font-weight:600; padding:6px 10px; border-radius:20px; background:var(--card); white-space:nowrap; }
+.kbtn.kid .kgo { color:var(--amber); } .kbtn.sleep .kgo { color:var(--blue); } .kbtn.night .kgo { color:var(--violet); } .kbtn.me .kgo { color:var(--teal); }
+@media (max-width:420px) { .kbtn { grid-template-columns:26px 1fr auto; } .kgo { padding:5px 8px; font-size:12px; } }

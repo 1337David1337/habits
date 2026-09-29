@@ -424,6 +424,10 @@ function kidTarget() {
 }
 // Какие кнопки сна показывать сейчас. night0 — «текущая» ночь для плашек и редактора:
 // днём и утром это прошлая ночь, с 17:00 — сегодняшняя.
+function bedFrom() {
+  const beds = recentKid(30).beds.filter(b => b < 1440);
+  return beds.length >= 3 ? Math.max(17 * 60, Math.min(19 * 60, median(beds) - 60)) : 19 * 60;
+}
 function kidButtons() {
   const hr = new Date().getHours(), t = todayDate(), tk = ymd(t), nd = bedDateNow();
   const night0 = hr >= 17 ? tk : ymd(addDays(t, -1));
@@ -432,7 +436,7 @@ function kidButtons() {
   return {
     wake: morning && wake == null,
     me: hr >= 3 && hr < 14 && me == null,
-    bed0: (hr >= 17 || hr < 4) && bed == null,
+    bed0: (nowMin() >= bedFrom() || hr < 4) && bed == null,
     night: (hr >= 17 || hr < 10) && bed != null && !(hr < 14 && wake != null),
     bed, nights: kd[nd]?.nights || [], night0,
     bedDone: bedOf(night0), nightsDone: kd[night0]?.nights || [],
@@ -606,15 +610,16 @@ function renderKid() {
     $("#kid-aside").textContent = "";
   }
   // Кнопки: видна только та, что имеет смысл сейчас, и ничего не перезаписывает
-  const K = kidButtons(), nowT = hm(toMin(nowHM()));
+  const K = kidButtons();
   $("#kid-wake-l").textContent = `${name} проснулся`;
-  $("#kid-wake-s").textContent = `запишу ${nowT}${fc && isToday ? ` · прогноз ${hm(fc.pred)}` : ""}`;
+  $("#kid-wake-s").textContent = `нажми, когда проснётся${fc && isToday ? ` · прогноз ${hm(fc.pred)}` : ""}`;
   $("#kid-sleep-l").textContent = `${name} уснул`;
-  $("#kid-sleep-s").textContent = `запишу ${nowT} как отбой`;
+  $("#kid-sleep-s").textContent = "нажми, когда уснёт на ночь";
   $("#kid-night-l").textContent = `${name} проснулся ночью`;
-  $("#kid-night-s").textContent = `уснул в ${hm(K.bed)}${K.nights.length ? ` · уже: ${K.nights.map(x => hm(toMin(x))).join(", ")}` : ""} · запишу ${nowT}`;
+  $("#kid-night-s").textContent = `уснул в ${hm(K.bed)}${K.nights.length ? ` · уже просыпался: ${K.nights.map(x => hm(toMin(x))).join(", ")}` : ""}`;
   const rec = recFor(tk);
-  $("#me-wake-s").textContent = rec != null ? `план ${hm(rec)} · запишу ${nowT}` : `запишу ${nowT}`;
+  $("#me-wake-l").textContent = "Я встал";
+  $("#me-wake-s").textContent = rec != null ? `нажми, когда встанешь · план ${hm(rec)}` : "нажми, когда встанешь";
   $("#kid-wake").hidden = !K.wake; $("#kid-sleep").hidden = !K.bed0; $("#kid-night").hidden = !K.night; $("#me-wake").hidden = !K.me;
   [$("#kid-wake"), $("#kid-sleep"), $("#kid-night"), $("#me-wake")].forEach(el => { el.disabled = !canWrite(); });
   // Уже отмеченное — плашками; нажатие открывает редактор этой ночи
@@ -625,7 +630,7 @@ function renderKid() {
   if (K.wakeDone != null) chips.push(chip("var(--amber)", `проснулся в ${hm(K.wakeDone)}`));
   if (K.meDone != null) chips.push(chip("var(--teal)", `ты встал в ${hm(K.meDone)}`));
   if (chips.length) chips.push(`<button type="button" class="chip-done fix" data-fix="${K.night0}">Исправить</button>`);
-  else if (!K.wake && !K.bed0 && !K.night && !K.me) chips.push(`<span class="chip-note">Кнопки сна появятся в 17:00.</span>`);
+  else if (!K.wake && !K.bed0 && !K.night && !K.me) chips.push(`<span class="chip-note">Кнопка «${esc(name)} уснул» появится в ${hm(bedFrom())}.</span>`);
   $("#kid-done").innerHTML = chips.join("");
   $("#lg-kid-wake").textContent = `${name} проснулся`;
   $("#lg-kid").textContent = `подъём ${kidGen()}`;
