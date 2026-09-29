@@ -103,6 +103,10 @@ function applyOp(d, op) {
   } else if (op.t === "session") {
     if (op.data == null) delete d.sessions[op.key];
     else d.sessions[op.key] = { ...(d.sessions[op.key] || {}), ...op.data };
+  } else if (op.t === "need") {
+    const n = d.needs.find(x => x.id === op.id);
+    if (op.data == null) d.needs = d.needs.filter(x => x.id !== op.id);
+    else if (n) Object.assign(n, op.data); else d.needs.push({ id: op.id, ...op.data });
   } else if (op.t === "prayer") {
     if (!op.items || !op.items.length) delete d.prayer[op.date]; else d.prayer[op.date] = op.items;
   } else if (op.t === "focus") {
@@ -121,7 +125,8 @@ function normalize(d) {
   return { version: 1, ...d, settings: { ...DEFAULT_SETTINGS, ...obj(d.settings) },
     habits: Array.isArray(d.habits) ? d.habits : [], log: obj(d.log), kid: obj(d.kid),
     me: obj(d.me), together: obj(d.together), reviews: obj(d.reviews), goals: Array.isArray(d.goals) ? d.goals : [],
-    sessions: obj(d.sessions), focus: obj(d.focus), rituals: obj(d.rituals), prayer: obj(d.prayer) };
+    sessions: obj(d.sessions), focus: obj(d.focus), rituals: obj(d.rituals), prayer: obj(d.prayer),
+    needs: Array.isArray(d.needs) ? d.needs : [] };
 }
 function recompute() {
   S.memo = null; S.recMemo = new Map();
@@ -202,6 +207,7 @@ function commitMsg(ops) {
   if (ops.some(o => o.t.startsWith("goal"))) parts.push("цели");
   if (ops.some(o => o.t === "session")) parts.push("слоты");
   if (ops.some(o => o.t === "focus")) parts.push("главное на день");
+  if (ops.some(o => o.t === "need")) parts.push(ops.some(o => o.t === "need" && o.data?.answered) ? "ответ на молитву" : "молитвенные нужды");
   ops.filter(o => o.t === "prayer").forEach(o => parts.push(`Молитва ${fmtDM.format(parse(o.date))}: ${(o.items || []).reduce((a, x) => a + x.m, 0)} мин`));
   if (ops.some(o => o.t === "ritual")) parts.push("вечерние 5 минут");
   if (ops.some(o => o.t === "habit" || o.t === "del")) parts.push("настройка привычек");
@@ -554,7 +560,7 @@ function render() {
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
   renderStepOptions(); renderRitualCard(); renderSlotCard(); renderFocus(); renderSlotPlan(); renderFocusTime();
-  renderPrayCard(); renderPrayStats(); renderPraySettings();
+  renderPrayCard(); renderPrayStats(); renderPraySettings(); renderNeeds();
 }
 function renderHeader() {
   const t = todayDate(), tk = ymd(t), v = currentView();
@@ -2152,8 +2158,10 @@ function tickPray() {
   $("#pray").classList.toggle("paused", !!r.paused);
   $("#pray-state").textContent = r.paused ? "Пауза" : "Молитва";
   $("#pray-pause").textContent = r.paused ? "Продолжить" : "Пауза";
-  const plan = prPlan(), i = Math.min(r.point || 0, plan.length);
-  $("#pray-point").hidden = !plan.length;
+  const plan = prPlan(), i = Math.min(r.point || 0, plan.length), pn = prayNeeds(i);
+  $("#pray-point").hidden = !plan.length && !pn.length;
+  $("#pray-needs").innerHTML = pn.map(n => `<li>${esc(n.t)}</li>`).join("");
+  if (!plan.length) { $("#pp-n").textContent = "Нужды"; $("#pp-t").textContent = ""; $("#pp-next").hidden = true; }
   if (plan.length) {
     $("#pp-n").textContent = i < plan.length ? `Пункт ${i + 1} из ${plan.length}` : "План пройден";
     $("#pp-t").textContent = i < plan.length ? plan[i] : "Можно продолжать свободно или завершить";
@@ -2280,6 +2288,107 @@ $("#pr-chime").addEventListener("change", e => setSetting({ prayerChime: e.targe
 $("#pr-plan").addEventListener("change", e => setSetting({ prayerPlan: e.target.value.split("\n").map(x => x.trim()).filter(Boolean) }));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !$("#pray").hidden) keepAwake(true); });
 setInterval(() => { if (prRun()) tickPray(); }, 1000);
+
+/* ---------- молитвенные нужды ---------- */
+// needs[] = {id, t, cat, created, answered, note}
+const NV = { view: "open", month: 0, answering: null, confirmDel: null };
+const needs = () => S.data?.needs || [];
+const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
+function renderNeeds() {
+  if (!S.data) return;
+  const list = $("#need-list");
+  if (list.contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const tk = ymd(todayDate()), plan = prPlan(), open = needs().filter(n => !n.answered), done = needs().filter(n => n.answered);
+  $("#needs-aside").textContent = needs().length ? `${open.length} ${plural(open.length, "ждёт", "ждут", "ждут")} ответа · ${done.length} ${plural(done.length, "ответ", "ответа", "ответов")}` : "";
+  const cat = $("#need-cat");
+  cat.hidden = !plan.length;
+  if (cat !== document.activeElement) cat.innerHTML = `<option value="">без темы</option>` + plan.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+  $("#need-add").disabled = !canWrite();
+  document.querySelectorAll("#need-seg button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.nv === NV.view)));
+  const items = NV.view === "open"
+    ? open.sort((a, b) => a.created < b.created ? -1 : 1)
+    : done.sort((a, b) => a.answered > b.answered ? -1 : 1);
+  list.innerHTML = items.map(n => {
+    const id = esc(n.id), wait = daysBetween(n.created, n.answered || tk);
+    const meta = n.answered
+      ? `ответ ${fmtShort.format(parse(n.answered))} · ${wait ? `через ${wait} ${plural(wait, "день", "дня", "дней")}` : "в тот же день"}${n.cat ? " · " + esc(n.cat) : ""}`
+      : `с ${fmtShort.format(parse(n.created))} · ${wait ? `${wait} ${plural(wait, "день", "дня", "дней")}` : "сегодня"}${n.cat ? " · " + esc(n.cat) : ""}`;
+    let act;
+    if (NV.answering === n.id) act = `<form class="nd-form" data-nd-ans="${id}">
+        <input class="field" type="date" value="${tk}" max="${tk}" min="${esc(n.created)}" aria-label="Когда получен ответ">
+        <input class="field" type="text" maxlength="200" placeholder="Как пришёл ответ — необязательно" aria-label="Заметка об ответе">
+        <button class="btn sm" type="submit">Записать</button><button class="btn ghost sm" type="button" data-nd="cancel">Отмена</button></form>`;
+    else if (NV.confirmDel === n.id) act = `<div class="nd-act"><span class="nd-meta">Удалить нужду?</span><button type="button" class="btn danger sm" data-nd="del-yes" data-id="${id}">Удалить</button><button type="button" class="btn ghost sm" data-nd="cancel">Отмена</button></div>`;
+    else act = `<div class="nd-act">${n.answered
+        ? `<button type="button" class="btn ghost sm" data-nd="reopen" data-id="${id}">Ещё жду ответа</button>`
+        : `<button type="button" class="btn teal-soft sm" data-nd="answer" data-id="${id}" ${canWrite() ? "" : "disabled"}>Ответ получен</button>`}
+        <button type="button" class="btn ghost sm" data-nd="del" data-id="${id}" ${canWrite() ? "" : "disabled"}>Удалить</button></div>`;
+    return `<li><div class="nd-top"><span class="nd-t">${esc(n.t)}</span></div><span class="nd-meta">${meta}</span>
+      ${n.answered && n.note ? `<span class="nd-note">${esc(n.note)}</span>` : ""}${act}</li>`;
+  }).join("") || `<li class="empty">${NV.view === "open" ? "Запиши, о чём молишься, — когда придёт ответ, отметь его, и он появится на календаре." : "Отвеченных пока нет."}</li>`;
+  renderNeedCal();
+}
+function renderNeedCal() {
+  const t = todayDate(), first = new Date(t.getFullYear(), t.getMonth() + NV.month, 1), n = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  $("#nc-label").textContent = `${MONTHS[first.getMonth()]} ${first.getFullYear()}`;
+  $("#nc-next").disabled = NV.month >= 0;
+  const byAns = {}, byNew = {};
+  needs().forEach(x => { if (x.answered) (byAns[x.answered] ||= []).push(x); (byNew[x.created] ||= []).push(x); });
+  let s = `<div class="mgrid">${DOW.map(d => `<span class="mdow">${d}</span>`).join("")}`;
+  for (let i = 0; i < dow(first); i++) s += "<span></span>";
+  let monthAns = 0;
+  for (let day = 1; day <= n; day++) {
+    const d = new Date(first.getFullYear(), first.getMonth(), day), k = ymd(d), a = byAns[k] || [], c = byNew[k] || [];
+    monthAns += a.length;
+    const tip = [a.length ? `ответ: ${a.map(x => x.t).join("; ")}` : "", c.length ? `новые: ${c.map(x => x.t).join("; ")}` : ""].filter(Boolean).join(" · ");
+    const cls = ["md", d > t ? "future" : "", a.length ? "ans" : "", c.length ? "nw" : "", k === ymd(t) ? "today" : ""].join(" ");
+    s += `<span class="${cls}" ${tip ? `data-tip="${esc(fmtShort.format(d) + " · " + tip)}"` : ""}><b>${day}</b>${a.length ? `<i class="cnt">${a.length > 1 ? "×" + a.length : "✓"}</i>` : ""}${c.length ? '<i class="nd-dot"></i>' : ""}</span>`;
+  }
+  $("#need-cal").innerHTML = s + "</div>";
+  const all = needs().filter(x => x.answered), avg = all.length ? Math.round(all.reduce((a, x) => a + daysBetween(x.created, x.answered), 0) / all.length) : null;
+  $("#need-cal-cap").textContent = `За месяц ответов: ${monthAns}.` + (all.length ? ` Всего отвечено ${all.length}${avg ? `, в среднем через ${avg} ${plural(avg, "день", "дня", "дней")}` : ""}.` : "");
+}
+// Нужды для текущего пункта плана в таймере молитвы
+function prayNeeds(point) {
+  const open = needs().filter(n => !n.answered), plan = prPlan();
+  const list = !plan.length || point >= plan.length ? open.filter(n => !n.cat || !plan.includes(n.cat)) : open.filter(n => n.cat === plan[point]);
+  return list.slice(0, 6);
+}
+$("#need-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const t = $("#need-text").value.trim();
+  if (!t) return;
+  if (!canWrite()) { openConnect(); return; }
+  const id = "n" + Date.now().toString(36);
+  op({ t: "need", id, data: { t, cat: $("#need-cat").hidden ? "" : $("#need-cat").value, created: ymd(todayDate()), answered: null, note: "" } });
+  $("#need-text").value = "";
+  NV.view = "open"; renderNeeds();
+});
+document.querySelectorAll("#need-seg button").forEach(b => b.addEventListener("click", () => { NV.view = b.dataset.nv; NV.answering = NV.confirmDel = null; renderNeeds(); }));
+$("#nc-prev").addEventListener("click", () => { NV.month--; renderNeedCal(); });
+$("#nc-next").addEventListener("click", () => { if (NV.month < 0) { NV.month++; renderNeedCal(); } });
+$("#need-list").addEventListener("click", e => {
+  const b = e.target.closest("[data-nd]");
+  if (!b) return;
+  const a = b.dataset.nd, id = b.dataset.id, n = needs().find(x => x.id === id);
+  if (a === "cancel") { NV.answering = NV.confirmDel = null; renderNeeds(); return; }
+  if (a === "answer") { NV.answering = id; NV.confirmDel = null; renderNeeds(); setTimeout(() => $(`[data-nd-ans="${id}"] input[type=text]`)?.focus(), 30); return; }
+  if (a === "del") { NV.confirmDel = id; NV.answering = null; renderNeeds(); return; }
+  if (!n) return;
+  if (a === "del-yes") { NV.confirmDel = null; const prev = { ...n }; op({ t: "need", id, data: null }); toast("Нужда удалена", () => op({ t: "need", id, data: prev })); }
+  if (a === "reopen") { const prev = { answered: n.answered, note: n.note }; op({ t: "need", id, data: { answered: null, note: "" } }); toast("Вернул в «Ждут ответа»", () => op({ t: "need", id, data: prev })); }
+});
+$("#need-list").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target.closest("[data-nd-ans]"), id = f?.dataset.ndAns, n = needs().find(x => x.id === id);
+  if (!n) return;
+  const date = f.querySelector("input[type=date]").value || ymd(todayDate());
+  if (date < n.created || date > ymd(todayDate())) { notice("Дата ответа — между днём, когда нужда записана, и сегодня."); return; }
+  NV.answering = null;
+  document.activeElement?.blur?.();
+  op({ t: "need", id, data: { answered: date, note: f.querySelector("input[type=text]").value.trim() } });
+  toast(`Ответ записан: ${fmtShort.format(parse(date))}`, () => op({ t: "need", id, data: { answered: null, note: "" } }));
+});
 
 /* ---------- тема ---------- */
 function themeChoice() { try { const t = localStorage.getItem("habits.theme"); return t === "light" || t === "dark" ? t : "auto"; } catch { return "auto"; } }

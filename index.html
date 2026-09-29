@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -177,6 +177,37 @@
             <button class="btn" type="submit">Добавить цель</button>
           </form>
         </details>
+      </section>
+
+      <section class="card span2" id="needs">
+        <div class="card-h"><h2>Молитвенные нужды</h2><small id="needs-aside"></small></div>
+        <form class="row" id="need-form">
+          <label class="sr" for="need-text">Новая нужда</label>
+          <input class="field" type="text" id="need-text" maxlength="140" placeholder="О чём или о ком молишься" autocomplete="off">
+          <label class="sr" for="need-cat">Тема</label>
+          <select class="field" id="need-cat"></select>
+          <button class="btn" type="submit" id="need-add">Добавить</button>
+        </form>
+        <div class="needs-grid">
+          <div>
+            <div class="seg" role="tablist" aria-label="Нужды" id="need-seg">
+              <button type="button" role="tab" data-nv="open" aria-selected="true">Ждут ответа</button>
+              <button type="button" role="tab" data-nv="done" aria-selected="false">Отвечено</button>
+            </div>
+            <ul class="needs" id="need-list"></ul>
+          </div>
+          <div>
+            <div class="per-nav">
+              <button type="button" id="nc-prev" aria-label="Предыдущий месяц">←</button>
+              <span class="nav-l" id="nc-label"></span>
+              <span class="sp"></span>
+              <button type="button" id="nc-next" aria-label="Следующий месяц">→</button>
+            </div>
+            <div id="need-cal"></div>
+            <div class="legend" aria-hidden="true"><i style="background:var(--teal)"></i> ответ получен <span class="gap"></span><span class="nd"></span> добавлена нужда</div>
+            <p class="note" id="need-cal-cap"></p>
+          </div>
+        </div>
       </section>
 
       <section class="card span2" id="slot-plan">
@@ -472,6 +503,7 @@
       <div class="pray-point" id="pray-point" hidden>
         <span class="pp-n" id="pp-n"></span>
         <b id="pp-t"></b>
+        <ul class="pray-needs" id="pray-needs"></ul>
         <button type="button" class="pray-btn soft" id="pp-next">Дальше</button>
       </div>
       <div class="pray-actions">
@@ -507,6 +539,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>
