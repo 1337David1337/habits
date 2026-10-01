@@ -786,3 +786,4 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .demo-bar b { color:var(--amber); }
 .demo-bar span { flex:1 1 200px; color:var(--soft); }
 .demo-bar a { font-weight:600; color:var(--amber); }
+#remind .row-btns:empty { display:none; }

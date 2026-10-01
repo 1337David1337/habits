@@ -127,6 +127,10 @@ function applyOp(d, op) {
   } else if (op.t === "ritual") {
     const box = d.rituals[op.kind] || (d.rituals[op.kind] = {});
     if (op.time == null) delete box[op.date]; else box[op.date] = op.time;
+  } else if (op.t === "pushSub") {
+    const ep = op.sub?.endpoint || op.endpoint;
+    d.push.subs = d.push.subs.filter(x => x.endpoint !== ep);
+    if (!op.remove) d.push.subs.push(op.sub);
   } else if (op.t === "settings") {
     Object.assign(d.settings, op.data);
   }
@@ -139,7 +143,8 @@ function normalize(d) {
     habits: Array.isArray(d.habits) ? d.habits : [], log: obj(d.log), kid: obj(d.kid),
     me: obj(d.me), together: obj(d.together), reviews: obj(d.reviews), goals: Array.isArray(d.goals) ? d.goals : [],
     sessions: obj(d.sessions), focus: obj(d.focus), rituals: obj(d.rituals), prayer: obj(d.prayer),
-    needs: Array.isArray(d.needs) ? d.needs : [], care: obj(d.care), tags: obj(d.tags) };
+    needs: Array.isArray(d.needs) ? d.needs : [], care: obj(d.care), tags: obj(d.tags),
+    push: { ...obj(d.push), subs: Array.isArray(d.push?.subs) ? d.push.subs : [] } };
 }
 function recompute() {
   S.memo = null; S.recMemo = new Map();
@@ -224,6 +229,7 @@ function commitMsg(ops) {
   ops.filter(o => o.t === "prayer").forEach(o => parts.push(`Молитва ${fmtDM.format(parse(o.date))}: ${(o.items || []).reduce((a, x) => a + x.m, 0)} мин`));
   if (ops.some(o => o.t === "ritual")) parts.push("вечерние 5 минут");
   if (ops.some(o => o.t === "care")) parts.push("баланс сфер");
+  if (ops.some(o => o.t === "pushSub")) parts.push("напоминания на устройстве");
   if (ops.some(o => o.t === "tag")) parts.push("сферы задач");
   if (ops.some(o => o.t === "habit" || o.t === "del")) parts.push("настройка привычек");
   if (ops.some(o => o.t === "settings")) parts.push("настройки");
@@ -575,7 +581,7 @@ function render() {
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
   renderRitualCard(); renderSlotCard(); renderFocus(); renderBalance(); renderSlotPlan(); renderFocusTime();
-  renderPrayCard(); renderPrayStats(); renderPraySettings(); renderNeeds();
+  renderPrayCard(); renderPrayStats(); renderPraySettings(); renderNeeds(); renderRemind();
 }
 function renderHeader() {
   const t = todayDate(), tk = ymd(t), v = currentView();
@@ -2857,6 +2863,94 @@ document.addEventListener("visibilitychange", () => {
 });
 addEventListener("online", () => { if (S.cfg) S.pending.length ? flush() : refresh(); });
 
+/* ---------- напоминания ---------- */
+// Подписка на push хранится в data.json; присылает их GitHub Actions в репозитории с данными
+// (.github/remind.mjs) по расписанию. Здесь — открытый ключ, секретный лежит в секретах того репозитория
+const VAPID_PUBLIC = "BICTIBsqLSn51VxG2CaUrh0IGbW-NDN2gklsoSYeNpxasmb_EGAbyRIpDprI-Pv5U81ORvOBV6CK8ttqlrR71XM";
+const RM_DEFAULT = { morning: "06:30", evening: "21:30", weekly: "20:00", slots: true };
+const rmSettings = () => ({ ...RM_DEFAULT, ...(settings().reminders || {}) });
+// Время — только в окнах, когда работает расписание: утро 5:00–9:00, вечер 19:00–23:30
+const rmTimes = (from, to) => { const out = []; for (let m = from; m <= to; m += 30) out.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`); return out; };
+const RM_FIELDS = [["morning", rmTimes(300, 540)], ["evening", rmTimes(1140, 1410)], ["weekly", rmTimes(1140, 1410)]];
+const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const RM = { sub: null, busy: false };
+const deviceName = () => /iPhone/.test(navigator.userAgent) ? "iPhone" : /iPad/.test(navigator.userAgent) ? "iPad" : /Android/.test(navigator.userAgent) ? "Android" : /Mac/.test(navigator.userAgent) ? "Mac" : "компьютер";
+const b64u = s => { const b = atob((s + "=".repeat((4 - s.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function rmCheck() {
+  if (DEMO || !pushSupported()) return;
+  try { const reg = await navigator.serviceWorker.getRegistration(); RM.sub = reg ? await reg.pushManager.getSubscription() : null; } catch {}
+  renderRemind();
+}
+async function rmEnable() {
+  if (!canWrite()) { openConnect(); return; }
+  RM.busy = true; renderRemind();
+  try {
+    if (await Notification.requestPermission() !== "granted") throw Object.assign(new Error("denied"), { code: "denied" });
+    const reg = await navigator.serviceWorker.register("sw.js");
+    await navigator.serviceWorker.ready;
+    RM.sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
+    const j = RM.sub.toJSON();
+    op({ t: "pushSub", sub: { endpoint: j.endpoint, keys: j.keys, device: deviceName(), created: ymd(todayDate()) } },
+       { t: "settings", data: { tz: Intl.DateTimeFormat().resolvedOptions().timeZone, reminders: rmSettings() } });
+    toast("Напоминания включены на этом устройстве");
+  } catch (e) {
+    notice(e.code === "denied" ? "Уведомления запрещены. Разреши их: Настройки iPhone → Уведомления → Keel — и нажми «Включить» ещё раз."
+      : "Не удалось включить напоминания. Проверь связь и попробуй ещё раз.");
+  }
+  RM.busy = false; renderRemind();
+}
+async function rmDisable() {
+  const ep = RM.sub?.endpoint;
+  try { await RM.sub?.unsubscribe(); } catch {}
+  RM.sub = null;
+  if (ep) op({ t: "pushSub", endpoint: ep, remove: true });
+  renderRemind();
+}
+async function rmTest() {
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (reg) await reg.showNotification("Keel · проверка", { body: "Так будут выглядеть напоминания.", icon: "icon-192.png", tag: "keel-test" });
+}
+function renderRemind() {
+  if (!S.data) return;
+  const st = $("#rm-state"), note = $("#rm-note"), acts = $("#rm-actions"), n = (S.data.push?.subs || []).length;
+  let msg = "", btns = "";
+  if (DEMO) msg = "В демо напоминания выключены.";
+  else if (!pushSupported()) msg = isIOS && !standalone()
+    ? "На iPhone напоминания работают, когда Keel открыт с экрана «Домой»: в Safari нажми «Поделиться» → «На экран „Домой“», открой Keel с иконки и вернись сюда."
+    : "Этот браузер не умеет присылать уведомления.";
+  else if (Notification.permission === "denied") msg = "Уведомления для Keel запрещены. Разреши их в настройках телефона: Уведомления → Keel.";
+  else if (RM.sub) {
+    msg = "Включены на этом устройстве. Если дело уже сделано — молитва записана, вечерние 5 минут пройдены, — напоминание не придёт.";
+    btns = `<button type="button" class="btn ghost" id="rm-test">Показать пример</button><button type="button" class="btn ghost" id="rm-off">Выключить здесь</button>`;
+  } else {
+    msg = "Keel напомнит об утренней молитве, вечерних 5 минутах, обзоре недели и свободном слоте.";
+    btns = `<button type="button" class="btn" id="rm-on" ${RM.busy ? "disabled" : ""}>${RM.busy ? "Включаю…" : "Включить на этом устройстве"}</button>`;
+  }
+  st.textContent = n ? `${n} ${plural(n, "устройство", "устройства", "устройств")}` : "";
+  note.textContent = msg; acts.innerHTML = btns;
+  const r = rmSettings();
+  $("#rm-form").hidden = DEMO;
+  if (!document.activeElement?.closest?.("#rm-form")) {
+    RM_FIELDS.forEach(([k, times]) => {
+      $(`#rm-${k}`).innerHTML = `<option value="">не напоминать</option>` + times.map(t => `<option value="${t}" ${t === r[k] ? "selected" : ""}>${hz(t)}</option>`).join("");
+    });
+    $("#rm-slots").checked = !!r.slots;
+  }
+}
+$("#remind").addEventListener("click", e => {
+  if (e.target.closest("#rm-on")) rmEnable();
+  else if (e.target.closest("#rm-off")) rmDisable();
+  else if (e.target.closest("#rm-test")) rmTest();
+});
+$("#rm-form").addEventListener("change", e => {
+  if (!canWrite()) return;
+  const k = e.target.id.replace("rm-", "");
+  setSetting({ reminders: { ...rmSettings(), [k]: k === "slots" ? e.target.checked : e.target.value || null } });
+  e.target.blur();
+});
+
 if (DEMO) {
   const bar = document.createElement("div");
   bar.className = "demo-bar";
@@ -2870,4 +2964,5 @@ lastKey = ymd(todayDate()) + (new Date().getHours() < 12 ? "am" : "pm");
 route();
 applyTheme(themeChoice());
 if (S.cfg) S.pending.length ? flush() : refresh();
+rmCheck();
 })();

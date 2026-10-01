@@ -126,3 +126,14 @@ test("демо: вымышленные данные, настоящий вход
   expect(net).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test("напоминания: время сохраняется, на устройстве можно включить", async ({ page }) => {
+  const { puts, errors } = await open(page, { hash: "settings" });
+  await expect(page.locator("#rm-on")).toBeVisible();
+  await expect(page.locator("#rm-evening")).toHaveValue("21:30");
+  await page.locator("#rm-evening").selectOption("22:00");
+  await page.locator("#rm-slots").uncheck();
+  await expect.poll(() => puts.at(-1)?.settings?.reminders).toEqual({ morning: "06:30", evening: "22:00", weekly: "20:00", slots: false });
+  expect((await page.request.get("/sw.js")).ok()).toBe(true);
+  expect(errors).toEqual([]);
+});

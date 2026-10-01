@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="style.css?v=31">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -368,6 +368,18 @@
           </div>
         </div>
       </section>
+      <section class="card span2" id="remind">
+        <div class="card-h"><h2>Напоминания</h2><small id="rm-state"></small></div>
+        <p class="note" id="rm-note" style="margin-top:0"></p>
+        <div class="row-btns" id="rm-actions"></div>
+        <div class="fgrid" id="rm-form">
+          <label for="rm-morning">Утро — молитва <select class="field" id="rm-morning"></select></label>
+          <label for="rm-evening">Вечерние 5 минут <select class="field" id="rm-evening"></select></label>
+          <label for="rm-weekly">Обзор недели, воскресенье <select class="field" id="rm-weekly"></select></label>
+          <label class="check wide" for="rm-slots"><input type="checkbox" id="rm-slots"> За полчаса до свободного слота</label>
+        </div>
+        <p class="note">Приходят с опозданием до 15–20 минут — так работает бесплатное расписание GitHub.</p>
+      </section>
       <section class="card span2">
         <details class="sub" id="manage" open>
           <summary>Привычки</summary>
@@ -554,6 +566,6 @@
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
 <script src="demo-data.js?v=1"></script>
-<script src="app.js?v=33"></script>
+<script src="app.js?v=34"></script>
 </body>
 </html>
