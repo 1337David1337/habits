@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -93,7 +93,7 @@
         </section>
         <section class="card bal" id="bal-card" hidden>
           <div class="card-h"><h2 id="bal-title">Упор на завтра</h2><a class="aside" href="#results" id="bal-more">баланс сфер →</a></div>
-          <p class="bal-skew" id="bal-skew" hidden></p>
+          <div class="batts" id="bal-batts"></div>
           <div class="bal-rec" id="bal-rec"></div>
         </section>
         <section class="card">
@@ -260,7 +260,7 @@
         <div class="card-h"><h2>Баланс сфер</h2><small>последние 7 дней</small></div>
         <p class="bal-skew" id="bl-skew" hidden></p>
         <ul class="bal-list" id="bl-list"></ul>
-        <p class="note">«2 из 5» — сколько дней сфера получала время и норма дней в неделю. Норму можно поменять: от неё зависит, какие сферы попадут в «Упор на завтра».</p>
+        <p class="note">Заряд — дни, когда сфера получала время за последние 7 дней, от нормы: 2 из 5 = 40%. Больше 100% — сфере достаётся больше нормы. Норму можно поменять: от неё зависит, какие сферы попадут в «Упор на завтра».</p>
         <p class="pick-h">Сегодня уделил время</p>
         <div id="bl-care"></div>
         <p class="note">Само отмечается по привычкам, сделанным задачам и главному, шагам в слотах, времени вдвоём, молитве и вечерам в церкви. Остальное отметь здесь или в «Вечерних 5 минутах».</p>
@@ -555,6 +555,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 </body>
 </html>

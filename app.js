@@ -1069,6 +1069,10 @@ const kidsOf = x => taskIndex().kids.get(x.id) || [];
 const effDue = x => x.due || parentOf(x)?.due || null;
 // Дело, которое можно взять: открыто и не разбито на открытые подзадачи (тогда дела — сами подзадачи)
 const actionable = x => x.status !== "completed" && parentOf(x)?.status !== "completed" && !kidsOf(x).some(c => c.status !== "completed");
+// «Когда-нибудь» и «Ожидание» — не действия: их задачи не предлагаем, пока на обзоре недели
+// не перенесёшь в проекты или следующие действия
+const PARKED = /когда.?нибудь|someday|может.?быть|maybe|ожидани|^жду|waiting/i;
+const parked = x => PARKED.test(x.list || "");
 function taskSrc(x) {
   const p = parentOf(x), d = effDue(x);
   return `${x.list}${p ? ` › ${p.title}` : ""}${d ? ` · срок ${fmtDM.format(parse(d))}` : ""}`;
@@ -1996,7 +2000,7 @@ function sphereIdeas(s, tgtK) {
   if (T.data) {
     const pr = x => { const d = effDue(x); return !d ? 2 : d <= tgtK ? 0 : 1; }, roots = new Set();
     // от задачи с подзадачами — только ближайшая подзадача: это и есть следующее действие
-    T.data.tasks.filter(x => actionable(x) && taskSphere(x) === s && (!effDue(x) || effDue(x) <= addDaysK(tgtK, 7)))
+    T.data.tasks.filter(x => actionable(x) && !parked(x) && taskSphere(x) === s && (!effDue(x) || effDue(x) <= addDaysK(tgtK, 7)))
       .sort((a, b) => pr(a) - pr(b) || ((effDue(a) || "") < (effDue(b) || "") ? -1 : (effDue(a) || "") > (effDue(b) || "") ? 1 : byPos(a, b)))
       .filter(x => { const r = x.parent || x.id; return !roots.has(r) && roots.add(r); }).slice(0, 3)
       .forEach(x => out.push({ t: x.title, from: "task", src: taskSrc(x), taskId: x.id, listId: x.listId }));
@@ -2039,6 +2043,10 @@ function agoText(r) {
   const n = Math.round((parse(tk) - parse(r.last)) / 864e5);
   return n === 0 ? "сегодня было" : n === 1 ? "было вчера" : `${n} ${plural(n, "день", "дня", "дней")} без внимания`;
 }
+// Заряд сферы: дни с вниманием за 7 дней от нормы. Больше 100% — сфере достаётся больше нормы
+const pctOf = r => Math.round(r.touched / r.norm * 100);
+const battCls = p => p < 50 ? "low" : p < 100 ? "mid" : p <= 150 ? "full" : "over";
+const batt = r => { const p = pctOf(r); return `<span class="batt ${battCls(p)}" aria-hidden="true"><i style="width:${Math.min(100, p)}%"></i></span>`; };
 function skewText(rows) {
   const over = rows.filter(r => r.touched >= 4 && r.touched > r.norm), under = rows.filter(r => r.late && r.touched / r.norm < .5);
   const names = l => l.length > 3 ? `${l.slice(0, 3).map(r => `«${esc(r.s)}»`).join(", ")} и ещё ${l.length - 3}` : l.map(r => `«${esc(r.s)}»`).join(", ").replace(/, ([^,]*)$/, " и $1");
@@ -2052,8 +2060,8 @@ function renderBalance() {
   if (!sp.length) return;
   const tgt = planTarget(), tgtK = ymd(tgt), tk = ymd(todayDate()), isT = tgtK === tk, rows = balance(tgtK), st = settings();
   $("#bal-title").textContent = isT ? "Упор на сегодня" : "Упор на завтра";
-  const skew = skewText(rows);
-  $("#bal-skew").innerHTML = skew; $("#bal-skew").hidden = !skew;
+  $("#bal-batts").innerHTML = rows.map(r => { const p = pctOf(r);
+    return `<div class="bt ${battCls(p)}" role="img" aria-label="${esc(r.s)}: заряд ${p}%, ${r.touched} из ${r.norm} дней"><span class="bt-n">${esc(r.s)}</span><span class="bt-r">${batt(r)}<b>${p}%</b></span></div>`; }).join("");
   const recs = balanceRecs(tgtK, rows), focus = S.data.focus[tgtK] || [], full = focus.length >= 3;
   const inFocus = x => focus.some(f => (x.taskId && f.taskId === x.taskId) || f.t === x.t);
   const busy = (st.busyDays || []).includes(dow(tgt)) && st.busyLabel;
@@ -2065,22 +2073,21 @@ function renderBalance() {
         const j = (S.balAlt[r.s] || 0) % r.ideas.length, x = r.ideas[j], i = S.balIdeas.push({ ...x, s: r.s }) - 1, on = inFocus(x);
         return `<div class="pick"><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "warn-t" : ""}">${agoText(r)} · ${r.touched} из ${r.norm}</span>
           ${r.ideas.length > 1 ? `<button type="button" class="alt" data-balt="${esc(r.s)}" aria-label="Другое дело для сферы «${esc(r.s)}» (${j + 1} из ${r.ideas.length})" title="Другое дело">↻</button>` : ""}</div>
-          <button type="button" class="pi${x.from === "idea" ? " idea" : ""}" data-badd="${i}" ${on || full ? "disabled" : ""} aria-label="${on ? "Уже в главном" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(fromLine(x))}</small></span><span class="plus">${on ? "✓" : "+"}</span></button></div>`;
+          <button type="button" class="pi${x.from === "idea" ? " idea" : ""}${on ? " on" : ""}" data-badd="${i}" aria-pressed="${on}" ${!on && full ? "disabled" : ""} aria-label="${on ? "Убрать из главного" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(fromLine(x))}</small></span><span class="plus">${on ? "✓" : "+"}</span></button></div>`;
       }).join("")
-      + (full ? `<p class="note" style="margin:0">В главном на ${isT ? "сегодня" : "завтра"} уже три дела.</p>` : "")
+      + (full ? `<p class="note" style="margin:0">В главном на ${isT ? "сегодня" : "завтра"} уже три дела. Нажми на выбранное, чтобы убрать.</p>` : "")
     : `<p class="bal-ok">Все сферы в своей норме — можно идти по обычному плану.</p>`;
   renderBalanceStats(rows);
 }
 function renderBalanceStats(rows) {
-  const tk = ymd(todayDate()), DW = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"], skew = skewText(rows);
+  const tk = ymd(todayDate()), skew = skewText(rows);
   const ok = rows.every(r => r.touched >= r.norm);
   $("#bl-skew").innerHTML = skew || (ok ? "Все сферы в своей норме за неделю." : "");
   $("#bl-skew").className = "bal-skew" + (skew ? "" : " ok");
   $("#bl-skew").hidden = !skew && !ok;
   if (!document.activeElement?.closest?.("#bl-list"))
-    $("#bl-list").innerHTML = rows.map(r => `<li><span class="bn">${esc(r.s)}</span>
-      <span class="bd" aria-hidden="true">${r.week.map(x => `<i class="${x.what ? "on" : ""}${x.k === tk ? " t" : ""}" title="${DW[dow(parse(x.k))]}${x.what ? ": " + esc([...new Set(x.what)].join(", ")) : ""}"></i>`).join("")}</span>
-      <span class="bs ${r.touched >= r.norm ? "ok-t" : r.late ? "warn-t" : ""}">${r.touched} из</span>
+    $("#bl-list").innerHTML = rows.map(r => `<li class="${battCls(pctOf(r))}"><span class="bn">${esc(r.s)}</span>${batt(r)}<b class="bp">${pctOf(r)}%</b>
+      <span class="bs">${r.touched} из</span>
       <select class="field mini" data-norm="${esc(r.s)}" aria-label="Норма для сферы «${esc(r.s)}», дней в неделю">${[1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === r.norm ? "selected" : ""}>${n}</option>`).join("")}</select></li>`).join("");
   $("#bl-care").innerHTML = careChips(tk);
   renderBalanceTags();
@@ -2099,7 +2106,7 @@ function renderBalanceTags() {
   const box = $("#bal-tags");
   if (!T.data) { box.hidden = true; return; }
   const from = addDaysK(ymd(todayDate()), -6);
-  const list = T.data.tasks.filter(x => !parentOf(x) && (x.status !== "completed" || (x.completed && ymd(new Date(x.completed)) >= from)));
+  const list = T.data.tasks.filter(x => !parentOf(x) && !parked(x) && (x.status !== "completed" || (x.completed && ymd(new Date(x.completed)) >= from)));
   const rows = list.map(x => ({ x, s: taskSphere(x), tagged: S.data.tags[x.id] !== undefined }))
     .sort((a, b) => (a.s ? 1 : 0) - (b.s ? 1 : 0)).slice(0, 30);
   const none = list.filter(x => !taskSphere(x)).length;
@@ -2109,17 +2116,34 @@ function renderBalanceTags() {
     box.querySelector("ul").innerHTML = rows.map(({ x, s, tagged }) => `<li><span>${esc(x.title)}<small>${esc(x.list)}${kidsOf(x).length ? ` · ${kidsOf(x).length} ${plural(kidsOf(x).length, "подзадача", "подзадачи", "подзадач")} — с той же сферой` : ""}${tagged ? "" : s ? " · угадано" : ""}</small></span>
     <select class="field mini" data-tag="${esc(x.id)}" aria-label="Сфера задачи «${esc(x.title)}»">${sphereOptions(s)}</select></li>`).join("");
 }
+const DUE_FAIL = "Дату в Google Задачах поменять не удалось. Обнови скрипт google-tasks.gs и сделай новую версию развёртывания — см. «Настройки → Google Задачи».";
+// Нажатие на предложение добавляет его в главное, повторное — убирает
 function addBalanceIdea(i) {
-  const x = S.balIdeas?.[i], tgtK = ymd(planTarget());
+  const x = S.balIdeas?.[i], tgtK = ymd(planTarget()), day = tgtK === ymd(todayDate()) ? "сегодня" : "завтра";
   if (!x || !canWrite()) return;
   const items = (S.data.focus[tgtK] || []).map(f => ({ ...f }));
+  const at = items.findIndex(f => (x.taskId && f.taskId === x.taskId) || f.t === x.t);
+  if (at >= 0) { removeFocus(tgtK, at); return; }
   if (items.length >= 3) return;
-  items.push({ t: x.t, src: focusSrc(x, x.s), done: false, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, habit: x.habit || null });
+  const task = x.taskId && T.data?.tasks.find(t => t.id === x.taskId), move = task && task.due !== tgtK;
+  // прежняя дата задачи — чтобы вернуть её, если выбор отменят
+  items.push({ t: x.t, src: focusSrc(x, x.s), done: false, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, habit: x.habit || null, ...(move ? { prevDue: task.due } : {}) });
   op({ t: "focus", date: tgtK, items });
-  toast(`В главное на ${tgtK === ymd(todayDate()) ? "сегодня" : "завтра"}: ${x.t}`);
-  const task = x.taskId && T.data?.tasks.find(t => t.id === x.taskId);
-  if (task && task.due !== tgtK) taskDue(task, tgtK).then(renderPlan)
-    .catch(() => notice("Дату в Google Задачах поставить не удалось. Обнови скрипт google-tasks.gs и сделай новую версию развёртывания — см. «Настройки → Google Задачи»."));
+  toast(`В главное на ${day}: ${x.t}`, () => { const k = (S.data.focus[tgtK] || []).findIndex(f => f.t === x.t); if (k >= 0) removeFocus(tgtK, k, true); });
+  if (move) taskDue(task, tgtK).then(renderPlan).catch(() => notice(DUE_FAIL));
+}
+function removeFocus(k, at, quiet) {
+  const items = (S.data.focus[k] || []).map(f => ({ ...f })), [it] = items.splice(at, 1);
+  if (!it) return;
+  op({ t: "focus", date: k, items });
+  const task = it.taskId && T.data?.tasks.find(t => t.id === it.taskId);
+  if (task && "prevDue" in it && task.due === k) taskDue(task, it.prevDue).then(renderPlan).catch(() => notice(DUE_FAIL));
+  if (!quiet) toast(`Убрано из главного: ${it.t}`, () => {
+    const now = (S.data.focus[k] || []).map(f => ({ ...f }));
+    if (now.length >= 3) return;
+    now.splice(at, 0, it); op({ t: "focus", date: k, items: now });
+    if (task && "prevDue" in it && task.due !== k) taskDue(task, k).then(renderPlan).catch(() => notice(DUE_FAIL));
+  });
 }
 document.addEventListener("click", e => {
   const c = e.target.closest("[data-care]");
@@ -2221,7 +2245,7 @@ function wizFocus() {
   stepCatalog().forEach(c => cands.push({ t: c.text, src: c.gt, goal: c.goal, stepId: c.stepId || null, kind: "Шаги целей" }));
   if (T.data) {
     const pr = x => { const d = effDue(x); return !d ? 3 : d < tgt ? 0 : d === tgt ? 1 : 2; };
-    const picked = T.data.tasks.filter(x => actionable(x) && (!effDue(x) || effDue(x) <= addDaysK(tgt, 3)))
+    const picked = T.data.tasks.filter(x => actionable(x) && !parked(x) && (!effDue(x) || effDue(x) <= addDaysK(tgt, 3)))
       .sort((a, b) => pr(a) - pr(b) || byPos(a, b)).slice(0, 12);
     // подзадачи одной задачи — подряд, под её названием
     const roots = [...new Set(picked.map(x => x.parent || x.id))];
@@ -2240,7 +2264,7 @@ function wizFocus() {
       if (c.kind !== gk) return "";
       const head = c.under && c.under !== last ? `<p class="pick-sub">${esc(c.under)}</p>` : "", note = c.note ?? c.src ?? "";
       last = c.under;
-      return head + `<button type="button" class="pi${c.under ? " sub" : ""}" data-fadd="${i}" ${full || has(c) ? "disabled" : ""}><span>${esc(c.t)}${note ? `<small>${esc(note)}</small>` : ""}</span><span class="plus">+</span></button>`;
+      return head + `<button type="button" class="pi${c.under ? " sub" : ""}" data-fadd="${i}" aria-pressed="${has(c)}" ${full && !has(c) ? "disabled" : ""}><span>${esc(c.t)}${note ? `<small>${esc(note)}</small>` : ""}</span><span class="plus">${has(c) ? "✓" : "+"}</span></button>`;
     }).join("")}</div>`; }).join("")}
     ${!T.data ? `<p class="note" style="margin:0">Google Задачи не подключены — дела из них появятся здесь после подключения.</p>` : ""}
     <div class="pick"><p class="pick-h">Своё</p><form class="inline-plan" data-fown><input class="field" id="wf-own" placeholder="Например: позвонить в банк" autocomplete="off" ${full ? "disabled" : ""}><button type="submit" class="btn ghost" ${full ? "disabled" : ""}>Добавить</button></form></div>`;
@@ -2361,7 +2385,11 @@ function finishWizard() {
   for (const [key, v] of Object.entries(st.plans)) { const o = planOp(key, v); if (o) ops.push(o); }
   let msg = "";
   if (kind === "evening" || kind === "focus") {
-    const items = st.focus.map(x => ({ t: x.t, src: x.src || "", done: !!x.done, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, habit: x.habit || null }));
+    const items = st.focus.map(x => {
+      const task = x.taskId && T.data?.tasks.find(t => t.id === x.taskId);
+      const prev = "prevDue" in x ? { prevDue: x.prevDue } : task && task.due !== st.target ? { prevDue: task.due } : {};
+      return { t: x.t, src: x.src || "", done: !!x.done, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, habit: x.habit || null, ...prev };
+    });
     ops.push({ t: "focus", date: st.target, items });
     if (kind === "evening") ops.push({ t: "ritual", kind: "evening", date: st.dayK, time: nowHM() });
     msg = items.length ? `Главное на ${st.target === tk ? "сегодня" : "завтра"}: ${items.length}` : "Готово";
@@ -2402,7 +2430,10 @@ $("#sheet-body").addEventListener("click", e => {
   const h = e.target.closest("[data-wh]");
   if (h) { const k = W.st.dayK; op({ t: "check", date: k, hid: h.dataset.wh, val: !isDone(k, h.dataset.wh) }); renderWizard(); return; }
   const a = e.target.closest("[data-fadd]");
-  if (a && !a.disabled) { const c = W.cands[Number(a.dataset.fadd)]; if (c && W.st.focus.length < 3) { W.st.focus.push({ t: c.t, src: c.src, taskId: c.taskId || null, listId: c.listId || null, goal: c.goal || null, habit: c.habit || null }); collectWizard(); renderWizard(); } return; }
+  if (a && !a.disabled) {
+    const c = W.cands[Number(a.dataset.fadd)], at = c ? W.st.focus.findIndex(x => (c.taskId && x.taskId === c.taskId) || x.t === c.t) : -1;
+    if (at >= 0) { W.st.focus.splice(at, 1); collectWizard(); renderWizard(); return; }
+    if (c && W.st.focus.length < 3) { W.st.focus.push({ t: c.t, src: c.src, taskId: c.taskId || null, listId: c.listId || null, goal: c.goal || null, habit: c.habit || null }); collectWizard(); renderWizard(); } return; }
   const d = e.target.closest("[data-fdel]");
   if (d) { W.st.focus.splice(Number(d.dataset.fdel), 1); collectWizard(); renderWizard(); }
 });

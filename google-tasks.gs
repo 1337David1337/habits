@@ -52,8 +52,9 @@ function doPost(e) {
     return json_({ ok: true });
   }
   if (body.action === 'due') {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(body.due || '')) return json_({ error: 'bad date' });
-    Tasks.Tasks.patch({ due: body.due + 'T00:00:00.000Z' }, body.listId, body.id);
+    // due: null — убрать дату (так дашборд возвращает задаче «без даты», когда её убрали из главного)
+    if (body.due !== null && !/^\d{4}-\d{2}-\d{2}$/.test(body.due || '')) return json_({ error: 'bad date' });
+    Tasks.Tasks.patch({ due: body.due === null ? null : body.due + 'T00:00:00.000Z' }, body.listId, body.id);
     return json_({ ok: true });
   }
   if (body.action === 'reopen') {
