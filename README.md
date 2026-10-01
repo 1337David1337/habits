@@ -1,4 +1,4 @@
-# Дашборд · трекер привычек
+# Keel — равновесие для отца
 
 Статичный сайт на GitHub Pages: https://1337david1337.github.io/habits/
 

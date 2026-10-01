@@ -578,7 +578,7 @@ function renderHeader() {
     : fmtLong.format(t);
   const sum = $("#today-sum");
   sum.hidden = v !== "today";
-  if (!S.cfg && !S.data) { sum.textContent = "Подключи репозиторий с данными, чтобы увидеть дашборд."; return; }
+  if (!S.cfg && !S.data) { sum.textContent = "Подключи репозиторий с данными, чтобы открыть Keel."; return; }
   if (!S.data) { sum.textContent = "Загружаю данные с GitHub…"; return; }
   const hs = active();
   if (!hs.length) { sum.textContent = "Привычек пока нет. Добавь первую в настройках."; return; }
@@ -1440,7 +1440,7 @@ function renderSystem() {
     checks.push(li(stale.length ? "warn" : "ok", stale.length ? "Висит дольше месяца" : "Ничего не висит дольше месяца", `${stale.length} шт`,
       stale.slice(0, 3).map(x => x.title).join(" · ")));
     checks.push(li(done7.length ? "ok" : "warn", "Задачи закрываются", `${done7.length} за неделю`));
-  } else checks.push(`<li class="empty">Подключи Google Задачи в «Настройках дашборда», чтобы видеть гигиену задач.</li>`);
+  } else checks.push(`<li class="empty">Подключи Google Задачи в «Настройках», чтобы видеть гигиену задач.</li>`);
   checks.push(li(reviewed ? "ok" : dow(todayDate()) >= 5 ? "warn" : "", reviewed ? "Обзор этой недели проведён" : "Обзор этой недели ещё впереди", reviewed ? fmtShort.format(parse(R[cur])) : ""));
   $("#sys-checks").innerHTML = checks.join("");
   let cells = "";
@@ -1457,7 +1457,7 @@ function renderSystem() {
   $("#rv-btn").disabled = !canWrite();
 }
 
-/* ---------- настройки дашборда ---------- */
+/* ---------- настройки ---------- */
 function renderSettingsPanel() {
   if (!S.data) return;
   const st = settings();
@@ -2062,7 +2062,7 @@ function sphereIdeas(s, tgtK) {
 }
 // Какие сферы поднять в день tgtK: те, кому по норме уже пора, — сильнее всех отставшие первыми
 // Откуда предложение: задача Google, шаг цели, привычка или подсказка самого дашборда (её нет нигде)
-const FROM = { task: "Google Задачи", goal: "Шаг цели", habit: "Привычка", idea: "Подсказка дашборда" };
+const FROM = { task: "Google Задачи", goal: "Шаг цели", habit: "Привычка", idea: "Подсказка Keel" };
 const fromLine = x => [FROM[x.from], x.src].filter(Boolean).join(" · ");
 const focusSrc = (x, s) => x.from === "task" ? x.src : `${FROM[x.from]} · ${s}`;
 function balanceRecs(tgtK, rows) {

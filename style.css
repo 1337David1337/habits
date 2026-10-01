@@ -456,7 +456,8 @@ ul.mlist .arch-name { flex:1 1 200px; color:var(--faint); }
   body { display:grid; grid-template-columns:220px minmax(0,1fr); }
   .tabbar { display:none; }
   .side { display:flex; flex-direction:column; gap:18px; position:sticky; top:0; height:100vh; padding:26px 14px; border-right:1px solid var(--line); }
-  .brand { font-size:18px; font-weight:700; padding:0 10px; }
+  .brand { font-size:18px; font-weight:700; padding:0 10px; display:flex; align-items:center; gap:10px; }
+  .brand img { border-radius:7px; }
   .side-nav { display:grid; gap:2px; }
   .side-nav a { flex-direction:row; gap:12px; padding:10px 12px; font-size:15px; }
   .side-nav a[aria-current="page"] { background:var(--teal-bg); }
