@@ -762,3 +762,19 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 #day.open .tl-next { display:none; }
 .tl-more { margin-top:10px; font-size:13.5px; }
 .faint { color:var(--faint); font-weight:400; }
+
+/* ---------- выбор подзадачи для слота ---------- */
+.slot-card select.field, .splan select.field { width:100%; min-width:0; }
+.slot-card select.field { margin-top:10px; }
+.splan .sx { font-size:14.5px; color:var(--soft); }
+
+/* ---------- понятность: кнопки сна на узком экране, мягкие предупреждения ---------- */
+@media (max-width:420px) {
+  .kbtn { grid-template-columns:24px minmax(0,1fr); align-items:start; }
+  .kbtn .kgo { grid-column:2; justify-self:start; margin-top:2px; }
+}
+.late-t { color:var(--amber); }
+#focus-card .bal-sub .batts { margin:0 0 12px; }
+.splan li { grid-template-columns:120px minmax(0,1fr); }
+@media (max-width:420px) { .splan li { grid-template-columns:minmax(0,1fr); } }
+.sheet ul.splan.card { padding:12px 14px; }

@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=26">
+<link rel="stylesheet" href="style.css?v=28">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -91,9 +91,10 @@
       <div class="stack">
         <section class="card bal" id="focus-card">
           <div class="card-h"><h2>Главное на сегодня</h2><small id="focus-count"></small></div>
-          <a class="batts" id="bal-batts" href="#plan" aria-label="Заряд сфер — открыть баланс в «Плане»" hidden></a>
           <ul class="focus" id="focus-list"></ul>
-          <div class="bal-sub" id="bal-sub" hidden><p class="bal-h" id="bal-title">Упор на завтра</p><div class="bal-rec" id="bal-rec"></div></div>
+          <div class="bal-sub" id="bal-sub" hidden><p class="bal-h" id="bal-title">Упор на завтра</p>
+            <a class="batts" id="bal-batts" href="#plan" aria-label="Заряд сфер — открыть баланс в «Плане»" hidden></a>
+            <div class="bal-rec" id="bal-rec"></div></div>
         </section>
         <section class="card">
           <div class="card-h"><h2>Привычки</h2><small id="hab-count"></small></div>
@@ -183,7 +184,7 @@
       </section>
       <section class="card span2" id="slot-plan">
         <div class="card-h"><h2>Слоты на неделю</h2><small id="slot-plan-aside"></small></div>
-        <p class="note" style="margin-top:0">Впиши в каждый свободный слот один шаг — выбери из следующих шагов целей или напиши свой.</p>
+        <p class="note" style="margin-top:0">В каждый свободный слот — одна подзадача из Google Задач. По «Готово» она закроется и там.</p>
         <ul class="splan" id="slot-plan-list"></ul>
       </section>
       <section class="span2" id="goals">
@@ -347,7 +348,7 @@
             <div class="chart" id="ft-chart"></div>
           </figure>
           <figure>
-            <figcaption>По целям за месяц<small id="ft-goals-cap">Время, потраченное в слотах.</small></figcaption>
+            <figcaption>По проектам за месяц<small id="ft-goals-cap">Время, потраченное в слотах.</small></figcaption>
             <ul class="hbars" id="ft-goals"></ul>
           </figure>
         </div>
@@ -501,7 +502,6 @@
 </div>
 
 <nav class="tabbar" aria-label="Разделы" data-nav></nav>
-<datalist id="step-options"></datalist>
 <div class="pray" id="pray" hidden role="dialog" aria-modal="true" aria-label="Молитва">
   <div class="pray-in">
     <header class="pray-h">
@@ -552,6 +552,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=31"></script>
 </body>
 </html>

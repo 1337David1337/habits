@@ -45,7 +45,7 @@ const TASKS = { lists: LISTS, tasks: [
 ] };
 
 async function open(page, { time = "10:00", hash = "today", data = fixture() } = {}) {
-  const errors = [], puts = [];
+  const errors = [], puts = [], google = [];
   let current = data;
   page.on("pageerror", e => errors.push(e.message));
   await page.clock.setFixedTime(at(time));
@@ -57,11 +57,14 @@ async function open(page, { time = "10:00", hash = "today", data = fixture() } =
     puts.push(current);
     return route.fulfill({ json: { content: { sha: `s${puts.length}` } } });
   });
-  await page.route("https://script.google.com/**", route =>
-    route.fulfill({ json: route.request().method() === "GET" ? TASKS : { ok: true } }));
+  await page.route("https://script.google.com/**", route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: TASKS });
+    google.push(JSON.parse(route.request().postData()));
+    return route.fulfill({ json: { ok: true } });
+  });
   await page.goto(`/#${hash}`);
   await page.locator("#main").waitFor({ state: "visible" });
-  return { errors, puts };
+  return { errors, puts, google };
 }
 
 module.exports = { TODAY, fixture, open };

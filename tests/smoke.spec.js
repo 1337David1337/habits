@@ -81,3 +81,27 @@ test("сфера списка важнее слов в названии зада
   await page.locator("#bal-lists summary").click();
   await expect(page.locator('#bal-lists select[data-list="Когда-нибудь/может быть"]')).toHaveValue("__parked");
 });
+
+test("слот: шаг выбирается из подзадач Google, «Уже сделал» закрывает её там", async ({ page }) => {
+  const { puts, google } = await open(page, { time: "21:00" });
+  const card = page.locator("#slot-card");
+  await expect(card.locator("input")).toHaveCount(0);
+  const pick = card.locator("select[data-slot-pick]");
+  await expect(pick.locator("optgroup")).toHaveCount(2);
+  await expect(pick.locator("option", { hasText: "море" })).toHaveCount(0);
+  await pick.selectOption({ label: "Выбрать кроватку" });
+  await expect(card.locator("h3")).toHaveText("Выбрать кроватку");
+  await expect(card).toContainText("Детская комната");
+  await expect.poll(() => puts.at(-1)?.sessions?.[`${TODAY} 20:40`]?.taskId).toBe("c5");
+  await card.locator('[data-slot-act="done"]').click();
+  await expect.poll(() => google.find(x => x.action === "complete")?.id).toBe("c5");
+  await expect.poll(() => puts.at(-1)?.sessions?.[`${TODAY} 20:40`]?.status).toBe("done");
+});
+
+test("«План → Слоты на неделю»: только выбор подзадачи, без своего текста", async ({ page }) => {
+  await open(page, { hash: "plan" });
+  const list = page.locator("#slot-plan-list");
+  await expect(list.locator("input")).toHaveCount(0);
+  await expect(list.locator("select[data-plan-key]").first()).toBeVisible();
+  await expect(list.locator("select[data-plan-key]").first().locator("optgroup")).toHaveCount(2);
+});

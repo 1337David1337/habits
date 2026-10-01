@@ -316,7 +316,7 @@ function weekStatus(h, mon) {
   let free = 0;
   for (let d = new Date(Math.max(t, mon)); d <= sun; d = addDays(d, 1)) if (!isDone(ymd(d), h.id)) free++;
   const need = target - count;
-  if (need > free) return { count, target, cls: "warn", text: "норму уже не добрать" };
+  if (need > free) return { count, target, cls: "", text: free ? `до конца недели — ещё ${free} ${plural(free, "раз", "раза", "раз")}` : "неделя закончилась" };
   return { count, target, cls: "", text: `осталось ${need} ${plural(need, "раз", "раза", "раз")}` };
 }
 // Норма считается с первого полного понедельника после создания привычки
@@ -567,7 +567,7 @@ function render() {
   if (!S.data) return;
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
-  renderStepOptions(); renderRitualCard(); renderSlotCard(); renderFocus(); renderBalance(); renderSlotPlan(); renderFocusTime();
+  renderRitualCard(); renderSlotCard(); renderFocus(); renderBalance(); renderSlotPlan(); renderFocusTime();
   renderPrayCard(); renderPrayStats(); renderPraySettings(); renderNeeds();
 }
 function renderHeader() {
@@ -582,9 +582,8 @@ function renderHeader() {
   if (!S.data) { sum.textContent = "Загружаю данные с GitHub…"; return; }
   const hs = active();
   if (!hs.length) { sum.textContent = "Привычек пока нет. Добавь первую в настройках."; return; }
-  const doneToday = hs.filter(h => isDone(tk, h.id)).length;
-  const month = normStats(new Date(t.getFullYear(), t.getMonth(), 1), new Date(t.getFullYear(), t.getMonth() + 1, 0));
-  sum.innerHTML = `Сегодня отмечено <b>${doneToday} из ${hs.length}</b> · норма месяца выполнена на <b>${pct(month.pct)}</b>`;
+  const doneToday = hs.filter(h => isDone(tk, h.id)).length, fc = S.data.focus[tk] || [];
+  sum.innerHTML = `${fc.length ? `Главное <b>${fc.filter(x => focusDone(x, tk)).length} из ${fc.length}</b>` : "Главное не выбрано"} · привычки <b>${doneToday} из ${hs.length}</b>`;
 }
 function renderToday() {
   const ul = $("#today-list"), t = todayDate(), tk = ymd(t), mon = monday(t), hs = active();
@@ -1049,6 +1048,8 @@ async function loadTasks(force) {
   } catch (e) { T.error = e; }
   T.loadedAt = Date.now(); T.loading = false;
   renderPlan(); renderBalance(); renderSystem(); renderSettingsPanel();
+  if (S.data) { renderSlotCard(); renderSlotPlan(); renderNow(); }
+  if (W.kind) { collectWizard(); renderWizard(); }
 }
 // Подзадачи: у задачи Google есть parent — id задачи-родителя из того же списка (вложенность одна)
 const TIX = new WeakMap();
@@ -1089,7 +1090,7 @@ function tasksError() {
   return T.error.code === "forbidden" ? "Google Задачи: ключ не подошёл. Запусти setup ещё раз и скопируй ключ из журнала выполнения."
     : "Не удалось получить Google Задачи. Проверь адрес веб-приложения и что у развёртывания доступ «Все».";
 }
-async function taskSet(task, done) {
+async function taskSet(task, done, quiet) {
   const st = settings(), before = { status: task.status, completed: task.completed };
   task.status = done ? "completed" : "needsAction";
   task.completed = done ? new Date().toISOString() : null;
@@ -1102,7 +1103,7 @@ async function taskSet(task, done) {
     if (j.error) throw new Error(j.error);
     lsSet(LS.tasks, T.data);
     renderBalance();
-    if (done) toast(`Готово: ${task.title}`, () => taskSet(task, false));
+    if (done && !quiet) toast(`Готово: ${task.title}`, () => taskSet(task, false));
   } catch (e) {
     Object.assign(task, before);
     notice("Не удалось отметить задачу в Google Задачах. Проверь связь и попробуй ещё раз.");
@@ -1778,14 +1779,33 @@ function stepCatalog() {
   out.forEach(x => { x.label = `${x.text} · ${x.gt}`; });
   return out;
 }
-function resolveStep(v) {
-  v = String(v || "").trim();
-  const c = stepCatalog().find(x => x.label === v) || stepCatalog().find(x => x.text === v);
-  return c ? { text: c.text, goal: c.goal, stepId: c.stepId || null } : { text: v, goal: null, stepId: null };
+// Шаг для слота — только открытая подзадача из Google Задач: задача с подзадачами — это проект,
+// подзадачи — его шаги. Своего текста нет, чтобы каждый шаг жил в списке и закрывался там же
+function slotSteps() {
+  if (!T.data) return [];
+  const steps = T.data.tasks.filter(x => x.parent && x.status !== "completed" && parentOf(x) && parentOf(x).status !== "completed" && !parked(x));
+  const projects = [...new Map(steps.map(x => [x.parent, parentOf(x)])).values()];
+  const firstDue = p => kidsOf(p).filter(c => c.status !== "completed").map(effDue).filter(Boolean).sort()[0] || "9999";
+  projects.sort((a, b) => firstDue(a) < firstDue(b) ? -1 : firstDue(a) > firstDue(b) ? 1 : a.title.localeCompare(b.title, "ru"));
+  return projects.map(p => ({ p, steps: steps.filter(x => x.parent === p.id).sort(byPos) }));
 }
-function renderStepOptions() {
-  $("#step-options").innerHTML = stepCatalog().map(x => `<option value="${esc(x.label)}"></option>`).join("");
+// Выпадающий список шагов для слота key; data-атрибут attr — как поле узнают обработчики
+function slotSelect(key, attr, { value, disabled } = {}) {
+  const s = sess(key), groups = slotSteps(), cur = value ?? (["skipped", "moved"].includes(s?.status) ? "" : s?.taskId || (s?.text ? "__cur" : ""));
+  const taken = new Map(upcomingSlots(14).filter(x => x.key !== key && ["planned", "started"].includes(sess(x.key)?.status) && sess(x.key)?.taskId)
+    .map(x => [sess(x.key).taskId, `${DOW[dow(x.d)].toLowerCase()} ${hz(x.from)}`]));
+  const known = groups.some(g => g.steps.some(x => x.id === cur));
+  const opts = `<option value="">${groups.length ? "— выбери подзадачу —" : "нет подзадач в Google Задачах"}</option>`
+    + (cur && !known && s?.text ? `<option value="__cur" selected>${esc(s.text)}</option>` : "")
+    + groups.map(g => `<optgroup label="${esc(g.p.title)} · ${esc(g.p.list)}">${g.steps.map(x => {
+      const d = effDue(x), busy = taken.get(x.id);
+      return `<option value="${esc(x.id)}" ${x.id === cur ? "selected" : ""}>${esc(x.title)}${d ? ` · срок ${fmtDM.format(parse(d))}` : ""}${busy ? ` · уже в слоте ${busy}` : ""}</option>`;
+    }).join("")}</optgroup>`).join("");
+  return `<select class="field" ${attr}="${esc(key)}" aria-label="Шаг для слота" ${disabled ? "disabled" : ""}>${opts}</select>`;
 }
+const NO_STEPS = () => !tasksUrl() ? "Подключи Google Задачи в настройках — шаги для слотов берутся из подзадач."
+  : !T.data ? "Загружаю подзадачи из Google Задач…"
+  : "В Google Задачах пока нет подзадач. Разбей проект на шаги-подзадачи — они появятся здесь.";
 
 /* ---------- слоты ---------- */
 const sKey = (date, from) => `${date} ${from}`;
@@ -1805,11 +1825,13 @@ function upcomingSlots(days) {
   return out;
 }
 function planOp(key, value) {
-  const cur = sess(key), v = String(value || "").trim();
+  const cur = sess(key), v = String(value || "");
+  if (v === "__cur") return null;
   if (!v) return cur && cur.status === "planned" ? { t: "session", key, data: null } : null;
-  const r = resolveStep(v);
-  if (cur && cur.text === r.text && ["planned", "started", "done"].includes(cur.status)) return null;
-  return { t: "session", key, data: { text: r.text, goal: r.goal, stepId: r.stepId, status: "planned", started: null, minutes: null, movedTo: null } };
+  const task = taskIndex().byId.get(v);
+  if (!task || (cur && cur.taskId === v && ["planned", "started", "done"].includes(cur.status))) return null;
+  return { t: "session", key, data: { text: task.title, taskId: task.id, listId: task.listId, project: parentOf(task)?.title || null,
+    goal: null, stepId: null, status: "planned", started: null, minutes: null, movedTo: null } };
 }
 function currentSlot() {
   const t = todayDate(), k = ymd(t), m = nowMin();
@@ -1837,15 +1859,15 @@ function renderSlotCard() {
     html = `${head}<h3>Шаг перенесён</h3><p class="sg">${esc(s.text)} → ${s.movedTo ? esc(fmtShort.format(parse(s.movedTo.slice(0, 10))) + ", " + hz(s.movedTo.slice(11))) : "следующий слот"}</p>`;
   } else if (s?.text) {
     const canStart = m >= x.a - 30;
-    html = `${head}<h3>${esc(s.text)}</h3><p class="sg">${gt ? esc(gt) : "свой шаг"}${!canStart ? ` · начнётся в ${hz(x.from)}` : ""}</p>
+    html = `${head}<h3>${esc(s.text)}</h3><p class="sg">${s.project ? esc(s.project) : gt ? esc(gt) : "шаг"}${!canStart ? ` · начнётся в ${hz(x.from)}` : ""}</p>
       <div class="row-btns">${canStart ? `<button type="button" class="btn" data-slot-act="start">Начать</button>` : ""}
         ${m >= x.a ? `<button type="button" class="btn ghost" data-slot-act="done">Уже сделал</button>` : ""}
         <button type="button" class="btn ghost" data-slot-act="move">Перенести</button>
         <button type="button" class="btn ghost" data-slot-act="skip">Пропустить</button></div>`;
   } else {
-    html = `${head}<h3>Шаг не выбран</h3><p class="sg">Один конкретный шаг на ${fmtDur(len)} — из целей или свой.</p>
-      <form class="inline-plan" data-slot-form><input class="field" list="step-options" placeholder="Что сделаешь в этом слоте" aria-label="Шаг для слота" autocomplete="off">
-      <button type="submit" class="btn">Поставить</button></form>`;
+    html = `${head}<h3>Шаг не выбран</h3>${slotSteps().length
+      ? `<p class="sg">Одна подзадача из Google Задач на ${fmtDur(len)}.</p>${slotSelect(x.key, "data-slot-pick")}`
+      : `<p class="sg">${NO_STEPS()}</p>`}`;
   }
   card.dataset.key = x.key;
   card.innerHTML = html;
@@ -1864,11 +1886,14 @@ function slotAction(key, act) {
     const g = s?.goal && S.data.goals.find(x => x.id === s.goal);
     const step = g && s.stepId && (g.steps || []).find(x => x.id === s.stepId);
     if (step && !step.done) ops.push({ t: "goalStep", id: g.id, sid: step.id, data: { done: true, doneAt: today } });
+    const task = s?.taskId && taskIndex().byId.get(s.taskId), close = task && task.status !== "completed";
     op(...ops);
-    toast(step ? `Готово: этап «${step.t}» пройден` : `Готово: ${fmtDur(minutes)} на цель`, () => {
+    if (close) taskSet(task, true, true);
+    toast(close ? `Готово: «${task.title}» закрыта и в Google Задачах` : step ? `Готово: этап «${step.t}» пройден` : `Готово: ${fmtDur(minutes)} на шаг`, () => {
       const back = [{ t: "session", key, data: prev }];
       if (step && !step.done) back.push({ t: "goalStep", id: g.id, sid: step.id, data: { done: false, doneAt: null } });
       op(...back);
+      if (close) taskSet(task, false);
     });
     return;
   }
@@ -1878,7 +1903,8 @@ function slotAction(key, act) {
     if (!target) { notice("Свободных слотов впереди нет — добавь слот в настройках или выбери шаг заново."); return; }
     const t = sess(target.key), tPrev = t ? { ...t } : null;
     op({ t: "session", key, data: { status: "moved", movedTo: target.key } },
-       { t: "session", key: target.key, data: { text: s?.text || "", goal: s?.goal || null, stepId: s?.stepId || null, status: "planned", started: null, minutes: null, movedTo: null } });
+       { t: "session", key: target.key, data: { text: s?.text || "", taskId: s?.taskId || null, listId: s?.listId || null, project: s?.project || null,
+         goal: s?.goal || null, stepId: s?.stepId || null, status: "planned", started: null, minutes: null, movedTo: null } });
     toast(`Перенёс на ${fmtShort.format(target.d)}, ${hz(target.from)}`, () => op({ t: "session", key, data: prev }, { t: "session", key: target.key, data: tPrev }));
   }
 }
@@ -1893,8 +1919,9 @@ function renderSlotPlan() {
     const badge = s?.status === "done" ? `<span class="st done">сделано</span>` : s?.status === "started" ? `<span class="st">идёт</span>`
       : s?.status === "skipped" ? `<span class="st skip">пропущен</span>` : s?.status === "moved" ? `<span class="st">перенесён</span>` : "";
     return `<li><div class="sd">${fmtShort.format(x.d)}<small>${hz(x.from)}–${hz(x.to)} ${badge}</small></div>
-      <input class="field" list="step-options" data-plan-key="${esc(x.key)}" value="${esc(locked ? s.text : s?.status === "skipped" ? "" : s?.text || "")}" placeholder="Что сделаешь" aria-label="Шаг на ${esc(fmtShort.format(x.d))}, ${hz(x.from)}" ${locked || !canWrite() ? "disabled" : ""} autocomplete="off"></li>`;
+      ${locked ? `<span class="sx">${esc(s.text)}</span>` : slotSelect(x.key, "data-plan-key", { disabled: !canWrite() })}</li>`;
   }).join("") || `<li class="empty">На ближайшую неделю слотов нет.</li>`;
+  if (list.length && !slotSteps().length) ul.insertAdjacentHTML("afterbegin", `<li class="empty">${NO_STEPS()}</li>`);
 }
 
 /* ---------- главное на сегодня ---------- */
@@ -2070,8 +2097,9 @@ function renderBalance() {
   const tgt = planTarget(), tgtK = ymd(tgt), tk = ymd(todayDate()), isT = tgtK === tk, rows = balance(tgtK), st = settings();
   const chosen = (S.data.focus[tgtK] || []).length;
   // До полудня предложения идут в главное на сегодня (прямо в список выше), после — на завтра
-  $("#bal-title").innerHTML = isT ? "Чего не хватает сегодня" : `Упор на завтра<small>выбрано ${chosen} из 3</small>`;
-  $("#bal-sub").hidden = isT && chosen >= 3;
+  $("#bal-title").innerHTML = `Упор на ${isT ? "сегодня" : "завтра"}<small>${isT ? "сферы, которым пора" : `выбрано на завтра ${chosen} из 3`}</small>`;
+  // три дела на сегодня выбраны — заряд сфер остаётся, предложения прячем
+  $("#bal-rec").hidden = isT && chosen >= 3;
   $("#bal-batts").innerHTML = rows.map(r => { const p = pctOf(r);
     return `<div class="bt ${battCls(p)}" role="img" aria-label="${esc(r.s)}: заряд ${p}%, ${r.touched} из ${r.norm} дней"><span class="bt-n">${esc(r.s)}</span><span class="bt-r">${batt(r)}<b>${p}%</b></span></div>`; }).join("");
   const recs = balanceRecs(tgtK, rows), focus = S.data.focus[tgtK] || [], full = focus.length >= 3;
@@ -2083,7 +2111,7 @@ function renderBalance() {
     ? (busy ? `<p class="note" style="margin:0">${isT ? "Сегодня" : "Завтра"} вечер — ${esc(st.busyLabel)}, поэтому одно короткое дело.</p>` : "")
       + recs.map(r => {
         const j = (S.balAlt[r.s] || 0) % r.ideas.length, x = r.ideas[j], i = S.balIdeas.push({ ...x, s: r.s }) - 1, on = inFocus(x);
-        return `<div class="pick"><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "warn-t" : ""}">${agoText(r)} · ${r.touched} из ${r.norm}</span>
+        return `<div class="pick"><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "late-t" : ""}">${agoText(r)} · ${r.touched} из ${r.norm}</span>
           ${r.ideas.length > 1 ? `<button type="button" class="alt" data-balt="${esc(r.s)}" aria-label="Другое дело для сферы «${esc(r.s)}» (${j + 1} из ${r.ideas.length})" title="Другое дело">↻</button>` : ""}</div>
           <button type="button" class="pi${x.from === "idea" ? " idea" : ""}${on ? " on" : ""}" data-badd="${i}" aria-pressed="${on}" ${!on && full ? "disabled" : ""} aria-label="${on ? "Убрать из главного" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(fromLine(x))}</small></span><span class="plus">${on ? "✓" : "+"}</span></button></div>`;
       }).join("")
@@ -2212,7 +2240,7 @@ function slotStats(from, to) {
       const len = toMin(x.to) - toMin(x.from), s = sess(sKey(k, x.from));
       if (k === ymd(t) && toMin(x.to) > m && s?.status !== "done") continue;
       r.count++; r.avail += len;
-      if (s?.status === "done") { r.doneN++; r.done += s.minutes || 0; const g = s.goal || "_"; r.byGoal[g] = (r.byGoal[g] || 0) + (s.minutes || 0); }
+      if (s?.status === "done") { r.doneN++; r.done += s.minutes || 0; const g = s.project ? "p:" + s.project : s.goal || "_"; r.byGoal[g] = (r.byGoal[g] || 0) + (s.minutes || 0); }
       if (s?.status === "skipped" || !s?.text) r.skipped++;
     }
   }
@@ -2232,7 +2260,7 @@ function renderFocusTime() {
   }
   barChart($("#ft-chart"), weeks);
   const mr = slotStats(new Date(t.getFullYear(), t.getMonth(), 1), t), ent = Object.entries(mr.byGoal).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...ent.map(e => e[1]));
-  $("#ft-goals").innerHTML = ent.length ? ent.map(([g, min]) => `<li><div class="hb-top"><span>${esc(g === "_" ? "Свои шаги" : goalTitle(g) || "Цель удалена")}</span><span class="v">${fmtDur(min)}</span></div>
+  $("#ft-goals").innerHTML = ent.length ? ent.map(([g, min]) => `<li><div class="hb-top"><span>${esc(g.startsWith("p:") ? g.slice(2) : g === "_" ? "Без проекта" : goalTitle(g) || "Цель удалена")}</span><span class="v">${fmtDur(min)}</span></div>
     <div class="hb"><i style="width:${min / max * 100}%"></i></div></li>`).join("") : `<li class="empty">Пока нет сделанных слотов в этом месяце.</li>`;
 }
 
@@ -2272,12 +2300,13 @@ function wizFocus() {
   const tgt = W.st.target, isT = tgt === ymd(todayDate()), f = W.st.focus, full = f.length >= 3;
   const has = c => f.some(x => (c.taskId && x.taskId === c.taskId) || x.t === c.t);
   const cands = [];
-  balanceRecs(tgt, balance(tgt)).forEach(r => r.ideas.slice(0, 2).forEach(x =>
+  balanceRecs(tgt, balance(tgt)).forEach(r => [r.ideas[(S.balAlt?.[r.s] || 0) % r.ideas.length]].forEach(x =>
     cands.push({ t: x.t, src: focusSrc(x, r.s), note: `${FROM[x.from]} · ${r.s}${x.taskId && parentOf(taskIndex().byId.get(x.taskId) || {}) ? ` › ${parentOf(taskIndex().byId.get(x.taskId)).title}` : ""} · ${agoText(r)}`, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, stepId: x.stepId || null, habit: x.habit || null, kind: "Упор — сферы, которые давно без внимания" })));
   stepCatalog().forEach(c => cands.push({ t: c.text, src: c.gt, goal: c.goal, stepId: c.stepId || null, kind: "Шаги целей" }));
   if (T.data) {
     const pr = x => { const d = effDue(x); return !d ? 3 : d < tgt ? 0 : d === tgt ? 1 : 2; };
-    const picked = T.data.tasks.filter(x => actionable(x) && !parked(x) && (!effDue(x) || effDue(x) <= addDaysK(tgt, 3)))
+    // то, что уже предложено в «Упоре», второй раз не показываем
+    const picked = T.data.tasks.filter(x => actionable(x) && !parked(x) && !cands.some(c => c.taskId === x.id) && (!effDue(x) || effDue(x) <= addDaysK(tgt, 3)))
       .sort((a, b) => pr(a) - pr(b) || byPos(a, b)).slice(0, 12);
     // подзадачи одной задачи — подряд, под её названием
     const roots = [...new Set(picked.map(x => x.parent || x.id))];
@@ -2303,9 +2332,10 @@ function wizFocus() {
 }
 const addDaysK = (k, n) => ymd(addDays(parse(k), n));
 function wizSlotInputs(list) {
-  return list.length ? `<ul class="splan card">${list.map(x => { const s = sess(x.key), v = W.st.plans[x.key] ?? (["skipped", "moved"].includes(s?.status) ? "" : s?.text || "");
+  return list.length ? (slotSteps().length ? "" : `<p class="note" style="margin:0">${NO_STEPS()}</p>`)
+    + `<ul class="splan card">${list.map(x => { const s = sess(x.key);
     return `<li><div class="sd">${fmtShort.format(x.d)}<small>${hz(x.from)}–${hz(x.to)}</small></div>
-      <input class="field" list="step-options" data-wplan="${esc(x.key)}" value="${esc(v)}" placeholder="Что сделаешь" autocomplete="off" ${s?.status === "done" ? "disabled" : ""}></li>`; }).join("")}</ul>`
+      ${s?.status === "done" ? `<span class="sx">${esc(s.text)} · сделано</span>` : slotSelect(x.key, "data-wplan", { value: W.st.plans[x.key] })}</li>`; }).join("")}</ul>`
     : `<p class="note" style="margin:0">Свободных слотов нет. Их можно задать в «Настройки → Распорядок».</p>`;
 }
 function wizTomorrow() {
@@ -2359,7 +2389,7 @@ function wizGoals() {
     }
     return `<div class="w-line"><b>${esc(g.title)} <span class="chip ${st.cls}">${st.text}</span></b>
       <div class="fgrid"><label>Сейчас${g.unit ? `, ${esc(g.unit)}` : ""} <input class="field" type="number" step="any" data-wg-val="${esc(g.id)}" value="${esc(v.val ?? gCur(g))}"></label>
-      <label class="wide">Следующий шаг <input class="field" data-wg-next="${esc(g.id)}" value="${esc(v.next ?? g.next ?? "")}" placeholder="Конкретное действие на один слот" maxlength="100"></label></div></div>`;
+      <label class="wide">Следующий шаг <input class="field" data-wg-next="${esc(g.id)}" value="${esc(v.next ?? g.next ?? "")}" placeholder="Конкретное следующее действие" maxlength="100"></label></div></div>`;
   }).join("");
 }
 const WIZ = {
@@ -2482,9 +2512,8 @@ document.addEventListener("click", e => {
   const sa = e.target.closest("[data-slot-act]");
   if (sa) { const key = $("#slot-card").dataset.key; if (key) slotAction(key, sa.dataset.slotAct); }
 });
-$("#slot-card").addEventListener("submit", e => {
-  e.preventDefault();
-  const key = $("#slot-card").dataset.key, o = planOp(key, e.target.querySelector("input").value);
+$("#slot-card").addEventListener("change", e => {
+  const el = e.target.closest("[data-slot-pick]"), o = el && planOp(el.dataset.slotPick, el.value);
   if (o) op(o);
 });
 $("#slot-plan-list").addEventListener("change", e => {
