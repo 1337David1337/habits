@@ -76,6 +76,7 @@ function collect_(list, options, out) {
         id: t.id, listId: list.id, list: list.title, title: t.title,
         due: t.due ? t.due.slice(0, 10) : null, status: t.status,
         completed: t.completed || null, updated: t.updated || null, parent: t.parent || null,
+        position: t.position || null,
       });
     });
     pageToken = res.nextPageToken;

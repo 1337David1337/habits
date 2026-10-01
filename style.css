@@ -682,3 +682,16 @@ ul.bal-list { list-style:none; margin:16px 0 0; padding:12px 0 0; border-top:1px
 .bal-tags li small { display:block; font-size:12px; color:var(--faint); }
 .bal-tags select { flex:none; max-width:42%; }
 .bal .pick button.pi { background:var(--field); }
+
+/* ---------- подзадачи ---------- */
+.pt.par, .pt-head { border-bottom:0; }
+.pt-head { list-style:none; padding:10px 0 2px; font-size:14.5px; font-weight:500; color:var(--soft); line-height:1.35; overflow-wrap:anywhere; }
+.pt-head small { display:block; font-size:12.5px; font-weight:400; color:var(--faint); }
+.pt.sub { padding:5px 0 5px 34px; border-bottom:0; }
+.pt.sub.last { border-bottom:1px solid var(--line); padding-bottom:10px; }
+.pt.sub:last-child { border-bottom:0; }
+.pt.sub button { width:20px; height:20px; }
+.pt.sub .pt-t { font-size:14.5px; }
+.pt.more { display:block; font-size:13px; color:var(--faint); }
+.pick-sub { margin:6px 0 0; font-size:13.5px; font-weight:500; color:var(--soft); }
+.pick button.pi.sub { margin-left:14px; }

@@ -1050,6 +1050,29 @@ async function loadTasks(force) {
   T.loadedAt = Date.now(); T.loading = false;
   renderPlan(); renderBalance(); renderSystem(); renderSettingsPanel();
 }
+// Подзадачи: у задачи Google есть parent — id задачи-родителя из того же списка (вложенность одна)
+const TIX = new WeakMap();
+const byPos = (a, b) => (a.position || "") < (b.position || "") ? -1 : (a.position || "") > (b.position || "") ? 1 : 0;
+function taskIndex() {
+  if (!T.data) return { byId: new Map(), kids: new Map() };
+  let ix = TIX.get(T.data);
+  if (!ix || ix.n !== T.data.tasks.length) {
+    ix = { n: T.data.tasks.length, byId: new Map(T.data.tasks.map(x => [x.id, x])), kids: new Map() };
+    T.data.tasks.forEach(x => { if (x.parent) { if (!ix.kids.has(x.parent)) ix.kids.set(x.parent, []); ix.kids.get(x.parent).push(x); } });
+    ix.kids.forEach(l => l.sort(byPos));
+    TIX.set(T.data, ix);
+  }
+  return ix;
+}
+const parentOf = x => x.parent ? taskIndex().byId.get(x.parent) || null : null;
+const kidsOf = x => taskIndex().kids.get(x.id) || [];
+const effDue = x => x.due || parentOf(x)?.due || null;
+// Дело, которое можно взять: открыто и не разбито на открытые подзадачи (тогда дела — сами подзадачи)
+const actionable = x => x.status !== "completed" && parentOf(x)?.status !== "completed" && !kidsOf(x).some(c => c.status !== "completed");
+function taskSrc(x) {
+  const p = parentOf(x), d = effDue(x);
+  return `${x.list}${p ? ` › ${p.title}` : ""}${d ? ` · срок ${fmtDM.format(parse(d))}` : ""}`;
+}
 function tasksError() {
   if (!T.error) return "";
   const k = settings().tasksKey || "";
@@ -1148,19 +1171,39 @@ function renderPlan() {
     ul.innerHTML = `<li class="empty">${T.loading ? "Загружаю задачи…" : esc(tasksError() || "Задачи ещё не загружены.")}</li>`;
     foot.textContent = ""; return;
   }
-  const open = T.data.tasks.filter(x => x.status !== "completed" || x.touched);
+  const open = T.data.tasks.filter(x => (x.status !== "completed" || x.touched) && parentOf(x)?.status !== "completed");
   const byDue = (a, b) => (a.due || "") < (b.due || "") ? -1 : 1;
   const groups = [
     ["Просрочено", open.filter(x => x.due && x.due < tk0).sort(byDue), "warn"],
     ["Осталось на сегодня", isToday ? [] : open.filter(x => x.due === tk0), ""],
     [isToday ? "На сегодня" : "На завтра", open.filter(x => x.due === k), ""],
   ].filter(g => g[1].length);
-  const li = x => `<li class="pt ${x.status === "completed" ? "done" : ""}"><button type="button" data-task="${esc(x.id)}" aria-label="${x.status === "completed" ? "Вернуть задачу" : "Отметить выполненной"}: ${esc(x.title)}">${CHECK}</button>
-    <span class="pt-t">${esc(x.title)}<small>${esc(x.list)}${x.due && x.due < tk0 ? ` · срок ${fmtDM.format(parse(x.due))}` : ""}</small></span></li>`;
-  const undated = open.filter(x => !x.due && x.status !== "completed").length;
+  // Подзадачи — под своей задачей. Если в группу попала только подзадача, её задача становится заголовком
+  const nodes = list => {
+    const m = new Map();
+    for (const x of list) { const r = parentOf(x) || x; if (!m.has(r.id)) m.set(r.id, { x: r, head: !list.includes(r) }); }
+    for (const n of m.values()) n.kids = kidsOf(n.x).filter(c => open.includes(c) && (n.head ? list.includes(c) : !c.due || list.includes(c)));
+    return [...m.values()];
+  };
+  const meta = (x, sub) => {
+    const k = kidsOf(x), parts = sub ? [] : [x.list];
+    if (x.due && x.due < tk0) parts.push(`срок ${fmtDM.format(parse(x.due))}`);
+    if (k.length) parts.push(`подзадачи: ${k.filter(c => c.status === "completed").length} из ${k.length}`);
+    return parts.length ? `<small>${esc(parts.join(" · "))}</small>` : "";
+  };
+  const li = (x, cls = "") => `<li class="pt${cls}${x.status === "completed" ? " done" : ""}"><button type="button" data-task="${esc(x.id)}" aria-label="${x.status === "completed" ? "Вернуть задачу" : "Отметить выполненной"}: ${esc(x.title)}">${CHECK}</button>
+    <span class="pt-t">${esc(x.title)}${meta(x, cls.includes("sub"))}</span></li>`;
+  const node = n => {
+    const kids = n.kids.slice(0, 6), more = n.kids.length - kids.length;
+    return (n.head ? `<li class="pt-head">${esc(n.x.title)}<small>${esc(n.x.list)}</small></li>` : li(n.x, kids.length ? " par" : ""))
+      + kids.map((c, i) => li(c, " sub" + (i === kids.length - 1 && !more ? " last" : ""))).join("")
+      + (more ? `<li class="pt sub last more">и ещё ${more} ${plural(more, "подзадача", "подзадачи", "подзадач")}</li>` : "");
+  };
+  const undated = open.filter(x => !x.due && !x.parent && x.status !== "completed").length;
   ul.innerHTML = groups.length
-    ? groups.map(([title, list, cls]) => `<li class="grp ${cls}">${title} · ${list.length}</li>` + list.slice(0, 8).map(li).join("")
-      + (list.length > 8 ? `<li class="empty">и ещё ${list.length - 8}</li>` : "")).join("")
+    ? groups.map(([title, list, cls]) => { const ns = nodes(list);
+      return `<li class="grp ${cls}">${title} · ${ns.length}</li>` + ns.slice(0, 8).map(node).join("")
+        + (ns.length > 8 ? `<li class="empty">и ещё ${ns.length - 8}</li>` : ""); }).join("")
     : `<li class="empty">На ${isToday ? "сегодня" : "завтра"} задач с датой нет.${undated ? ` Без даты: ${undated}.` : ""}</li>`;
   foot.innerHTML = `${T.loading ? "обновляю…" : `обновлено ${fmtTime.format(new Date(T.data.at))}`} · <button type="button" class="linkbtn" id="tasks-reload">Обновить</button>`
     + (T.error ? ` · <span class="warn-t">${esc(tasksError())}</span>` : "");
@@ -1842,8 +1885,9 @@ function renderSlotPlan() {
 }
 
 /* ---------- главное на сегодня ---------- */
+const focusDone = (it, k) => !!it.done || !!(it.habit && isDone(k, it.habit));
 function renderFocus() {
-  const tk = ymd(todayDate()), items = S.data.focus[tk] || [], ul = $("#focus-list");
+  const tk = ymd(todayDate()), items = (S.data.focus[tk] || []).map(x => ({ ...x, done: focusDone(x, tk) })), ul = $("#focus-list");
   $("#focus-count").textContent = items.length ? `${items.filter(x => x.done).length} из ${items.length}` : "";
   ul.innerHTML = items.length ? items.map((it, i) => `<li class="${it.done ? "done" : ""}"><button type="button" class="fk" data-focus="${i}" aria-label="${it.done ? "Вернуть" : "Отметить сделанным"}: ${esc(it.t)}">${CHECK}</button>
       <span class="ft">${esc(it.t)}${it.src ? `<small>${esc(it.src)}</small>` : ""}</span></li>`).join("")
@@ -1852,8 +1896,9 @@ function renderFocus() {
 function toggleFocus(i) {
   const tk = ymd(todayDate()), items = (S.data.focus[tk] || []).map(x => ({ ...x }));
   const it = items[i]; if (!it) return;
-  it.done = !it.done;
-  op({ t: "focus", date: tk, items });
+  it.done = !focusDone(it, tk);
+  // дело-привычка отмечает и саму привычку
+  op({ t: "focus", date: tk, items }, ...(it.habit && habits().some(h => h.id === it.habit) ? [{ t: "check", date: tk, hid: it.habit, val: it.done }] : []));
   const task = it.taskId && T.data?.tasks.find(x => x.id === it.taskId);
   if (task && (task.status === "completed") !== it.done) taskSet(task, it.done);
 }
@@ -1898,7 +1943,8 @@ function sphereOfText(text) {
 function taskSphere(x) {
   const tag = S.data?.tags?.[x.id];
   if (tag !== undefined) return tag || null;
-  return sphereOfText(x.title) || sphereOfText(x.list);
+  const p = parentOf(x);
+  return (p && taskSphere(p)) || sphereOfText(x.title) || sphereOfText(x.list);
 }
 // Что было сделано в каждой сфере по дням: { сфера: { дата: [что] } }
 function sphereActivity(from, to) {
@@ -1942,10 +1988,12 @@ function sphereIdeas(s, tgtK) {
       out.push({ t: `Время вдвоём, когда ${kidName()} уснёт: чай и разговор без телефонов`, src: tg.days == null ? "время вдвоём ещё не отмечалось" : `вдвоём были ${tg.days} ${plural(tg.days, "день", "дня", "дней")} назад` });
   }
   if (T.data) {
-    const pr = x => !x.due ? 2 : x.due <= tgtK ? 0 : 1;
-    T.data.tasks.filter(x => x.status !== "completed" && taskSphere(x) === s && (!x.due || x.due <= addDaysK(tgtK, 7)))
-      .sort((a, b) => pr(a) - pr(b) || ((a.due || "") < (b.due || "") ? -1 : 1)).slice(0, 2)
-      .forEach(x => out.push({ t: x.title, src: `${x.list}${x.due ? ` · срок ${fmtDM.format(parse(x.due))}` : ""}`, taskId: x.id, listId: x.listId }));
+    const pr = x => { const d = effDue(x); return !d ? 2 : d <= tgtK ? 0 : 1; }, roots = new Set();
+    // от задачи с подзадачами — только ближайшая подзадача: это и есть следующее действие
+    T.data.tasks.filter(x => actionable(x) && taskSphere(x) === s && (!effDue(x) || effDue(x) <= addDaysK(tgtK, 7)))
+      .sort((a, b) => pr(a) - pr(b) || ((effDue(a) || "") < (effDue(b) || "") ? -1 : (effDue(a) || "") > (effDue(b) || "") ? 1 : byPos(a, b)))
+      .filter(x => { const r = x.parent || x.id; return !roots.has(r) && roots.add(r); }).slice(0, 2)
+      .forEach(x => out.push({ t: x.title, src: taskSrc(x), taskId: x.id, listId: x.listId }));
   }
   goalsActive().filter(g => g.sphere === s).forEach(g => { const nx = nextStepOf(g); if (nx && !has(nx.text)) out.push({ t: nx.text, src: `шаг цели «${g.title}»`, goal: g.id, stepId: nx.stepId || null }); });
   active().filter(h => h.sphere === s).forEach(h => {
@@ -2010,13 +2058,13 @@ function renderBalanceTags() {
   const box = $("#bal-tags");
   if (!T.data) { box.hidden = true; return; }
   const from = addDaysK(ymd(todayDate()), -6);
-  const list = T.data.tasks.filter(x => x.status !== "completed" || (x.completed && ymd(new Date(x.completed)) >= from));
+  const list = T.data.tasks.filter(x => !parentOf(x) && (x.status !== "completed" || (x.completed && ymd(new Date(x.completed)) >= from)));
   const rows = list.map(x => ({ x, s: taskSphere(x), tagged: S.data.tags[x.id] !== undefined }))
     .sort((a, b) => (a.s ? 1 : 0) - (b.s ? 1 : 0)).slice(0, 30);
   const none = list.filter(x => !taskSphere(x)).length;
   box.hidden = !list.length;
   box.querySelector("summary").innerHTML = `Сферы задач${none ? ` · <span class="warn-t">без сферы: ${none}</span>` : ""}`;
-  box.querySelector("ul").innerHTML = rows.map(({ x, s, tagged }) => `<li><span>${esc(x.title)}<small>${esc(x.list)}${tagged ? "" : s ? " · угадано" : ""}</small></span>
+  box.querySelector("ul").innerHTML = rows.map(({ x, s, tagged }) => `<li><span>${esc(x.title)}<small>${esc(x.list)}${kidsOf(x).length ? ` · ${kidsOf(x).length} ${plural(kidsOf(x).length, "подзадача", "подзадачи", "подзадач")} — с той же сферой` : ""}${tagged ? "" : s ? " · угадано" : ""}</small></span>
     <select class="field mini" data-tag="${esc(x.id)}" aria-label="Сфера задачи «${esc(x.title)}»">${sphereOptions(s)}</select></li>`).join("");
 }
 function addBalanceIdea(i) {
@@ -2024,7 +2072,7 @@ function addBalanceIdea(i) {
   if (!x || !canWrite()) return;
   const items = (S.data.focus[tgtK] || []).map(f => ({ ...f }));
   if (items.length >= 3) return;
-  items.push({ t: x.t, src: x.src.startsWith("идея") ? x.s : x.src, done: false, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null });
+  items.push({ t: x.t, src: x.src.startsWith("идея") ? x.s : x.src, done: false, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, habit: x.habit || null });
   op({ t: "focus", date: tgtK, items });
   toast(`В главное на ${tgtK === ymd(todayDate()) ? "сегодня" : "завтра"}: ${x.t}`);
   const task = x.taskId && T.data?.tasks.find(t => t.id === x.taskId);
@@ -2112,21 +2160,31 @@ function wizFocus() {
   const has = c => f.some(x => (c.taskId && x.taskId === c.taskId) || x.t === c.t);
   const cands = [];
   balanceRecs(tgt, balance(tgt)).forEach(r => r.ideas.forEach(x =>
-    cands.push({ t: x.t, src: `${r.s} · ${agoText(r)}`, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, stepId: x.stepId || null, kind: "Упор — сферы, которые давно без внимания" })));
+    cands.push({ t: x.t, src: x.taskId ? x.src : r.s, note: `${r.s}${x.taskId && parentOf(taskIndex().byId.get(x.taskId) || {}) ? ` › ${parentOf(taskIndex().byId.get(x.taskId)).title}` : ""} · ${agoText(r)}`, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, stepId: x.stepId || null, habit: x.habit || null, kind: "Упор — сферы, которые давно без внимания" })));
   stepCatalog().forEach(c => cands.push({ t: c.text, src: c.gt, goal: c.goal, stepId: c.stepId || null, kind: "Шаги целей" }));
   if (T.data) {
-    const open = T.data.tasks.filter(x => x.status !== "completed");
-    const pr = x => !x.due ? 3 : x.due < tgt ? 0 : x.due === tgt ? 1 : 2;
-    open.filter(x => !x.due || x.due <= addDaysK(tgt, 3)).sort((a, b) => pr(a) - pr(b)).slice(0, 12)
-      .forEach(x => cands.push({ t: x.title, src: `${x.list}${x.due ? ` · срок ${fmtDM.format(parse(x.due))}` : ""}`, taskId: x.id, listId: x.listId, kind: "Google Задачи" }));
+    const pr = x => { const d = effDue(x); return !d ? 3 : d < tgt ? 0 : d === tgt ? 1 : 2; };
+    const picked = T.data.tasks.filter(x => actionable(x) && (!effDue(x) || effDue(x) <= addDaysK(tgt, 3)))
+      .sort((a, b) => pr(a) - pr(b) || byPos(a, b)).slice(0, 12);
+    // подзадачи одной задачи — подряд, под её названием
+    const roots = [...new Set(picked.map(x => x.parent || x.id))];
+    roots.forEach(r => picked.filter(x => (x.parent || x.id) === r).forEach(x => {
+      const p = parentOf(x), d = effDue(x);
+      cands.push({ t: x.title, src: taskSrc(x), note: p ? `${d ? `срок ${fmtDM.format(parse(d))}` : ""}` : taskSrc(x), under: p ? `${p.title} · ${p.list}` : null,
+        taskId: x.id, listId: x.listId, kind: "Google Задачи" });
+    }));
   }
   W.cands = cands;
   const groups = [...new Set(cands.map(c => c.kind))];
   return `<p class="note" style="margin:0">Не больше трёх дел на ${isT ? "сегодня" : "завтра"}. Остальное подождёт.</p>
     <ol class="chosen">${f.length ? f.map((it, i) => `<li><span>${i + 1}. ${esc(it.t)}</span><button type="button" class="xbtn" data-fdel="${i}" aria-label="Убрать">×</button></li>`).join("")
       : '<li class="empty" style="background:none;padding:0">Пока ничего не выбрано.</li>'}</ol>
-    ${groups.map(gk => `<div class="pick"><p class="pick-h">${gk}</p>${cands.map((c, i) => c.kind !== gk ? "" :
-      `<button type="button" class="pi" data-fadd="${i}" ${full || has(c) ? "disabled" : ""}><span>${esc(c.t)}<small>${esc(c.src || "")}</small></span><span class="plus">+</span></button>`).join("")}</div>`).join("")}
+    ${groups.map(gk => { let last = null; return `<div class="pick"><p class="pick-h">${gk}</p>${cands.map((c, i) => {
+      if (c.kind !== gk) return "";
+      const head = c.under && c.under !== last ? `<p class="pick-sub">${esc(c.under)}</p>` : "", note = c.note ?? c.src ?? "";
+      last = c.under;
+      return head + `<button type="button" class="pi${c.under ? " sub" : ""}" data-fadd="${i}" ${full || has(c) ? "disabled" : ""}><span>${esc(c.t)}${note ? `<small>${esc(note)}</small>` : ""}</span><span class="plus">+</span></button>`;
+    }).join("")}</div>`; }).join("")}
     ${!T.data ? `<p class="note" style="margin:0">Google Задачи не подключены — дела из них появятся здесь после подключения.</p>` : ""}
     <div class="pick"><p class="pick-h">Своё</p><form class="inline-plan" data-fown><input class="field" id="wf-own" placeholder="Например: позвонить в банк" autocomplete="off" ${full ? "disabled" : ""}><button type="submit" class="btn ghost" ${full ? "disabled" : ""}>Добавить</button></form></div>`;
 }
@@ -2246,7 +2304,7 @@ function finishWizard() {
   for (const [key, v] of Object.entries(st.plans)) { const o = planOp(key, v); if (o) ops.push(o); }
   let msg = "";
   if (kind === "evening" || kind === "focus") {
-    const items = st.focus.map(x => ({ t: x.t, src: x.src || "", done: !!x.done, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null }));
+    const items = st.focus.map(x => ({ t: x.t, src: x.src || "", done: !!x.done, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, habit: x.habit || null }));
     ops.push({ t: "focus", date: st.target, items });
     if (kind === "evening") ops.push({ t: "ritual", kind: "evening", date: st.dayK, time: nowHM() });
     msg = items.length ? `Главное на ${st.target === tk ? "сегодня" : "завтра"}: ${items.length}` : "Готово";
@@ -2287,7 +2345,7 @@ $("#sheet-body").addEventListener("click", e => {
   const h = e.target.closest("[data-wh]");
   if (h) { const k = W.st.dayK; op({ t: "check", date: k, hid: h.dataset.wh, val: !isDone(k, h.dataset.wh) }); renderWizard(); return; }
   const a = e.target.closest("[data-fadd]");
-  if (a && !a.disabled) { const c = W.cands[Number(a.dataset.fadd)]; if (c && W.st.focus.length < 3) { W.st.focus.push({ t: c.t, src: c.src, taskId: c.taskId || null, listId: c.listId || null, goal: c.goal || null }); collectWizard(); renderWizard(); } return; }
+  if (a && !a.disabled) { const c = W.cands[Number(a.dataset.fadd)]; if (c && W.st.focus.length < 3) { W.st.focus.push({ t: c.t, src: c.src, taskId: c.taskId || null, listId: c.listId || null, goal: c.goal || null, habit: c.habit || null }); collectWizard(); renderWizard(); } return; }
   const d = e.target.closest("[data-fdel]");
   if (d) { W.st.focus.splice(Number(d.dataset.fdel), 1); collectWizard(); renderWizard(); }
 });
