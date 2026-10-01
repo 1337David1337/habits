@@ -1991,7 +1991,7 @@ function sphereIdeas(s, tgtK) {
   if (c === "жена") {
     const tg = togetherInfo();
     if (tg.days == null || tg.days >= tg.gap)
-      out.push({ t: `Время вдвоём, когда ${kidName()} уснёт: чай и разговор без телефонов`, src: tg.days == null ? "время вдвоём ещё не отмечалось" : `вдвоём были ${tg.days} ${plural(tg.days, "день", "дня", "дней")} назад` });
+      out.push({ t: `Время вдвоём, когда ${kidName()} уснёт: чай и разговор без телефонов`, from: "idea", src: tg.days == null ? "вдвоём ещё не отмечали" : `вдвоём были ${tg.days} ${plural(tg.days, "день", "дня", "дней")} назад` });
   }
   if (T.data) {
     const pr = x => { const d = effDue(x); return !d ? 2 : d <= tgtK ? 0 : 1; }, roots = new Set();
@@ -1999,12 +1999,12 @@ function sphereIdeas(s, tgtK) {
     T.data.tasks.filter(x => actionable(x) && taskSphere(x) === s && (!effDue(x) || effDue(x) <= addDaysK(tgtK, 7)))
       .sort((a, b) => pr(a) - pr(b) || ((effDue(a) || "") < (effDue(b) || "") ? -1 : (effDue(a) || "") > (effDue(b) || "") ? 1 : byPos(a, b)))
       .filter(x => { const r = x.parent || x.id; return !roots.has(r) && roots.add(r); }).slice(0, 3)
-      .forEach(x => out.push({ t: x.title, src: taskSrc(x), taskId: x.id, listId: x.listId }));
+      .forEach(x => out.push({ t: x.title, from: "task", src: taskSrc(x), taskId: x.id, listId: x.listId }));
   }
-  goalsActive().filter(g => g.sphere === s).forEach(g => { const nx = nextStepOf(g); if (nx && !has(nx.text)) out.push({ t: nx.text, src: `шаг цели «${g.title}»`, goal: g.id, stepId: nx.stepId || null }); });
+  goalsActive().filter(g => g.sphere === s).forEach(g => { const nx = nextStepOf(g); if (nx && !has(nx.text)) out.push({ t: nx.text, from: "goal", src: `«${g.title}»`, goal: g.id, stepId: nx.stepId || null }); });
   active().filter(h => h.sphere === s).forEach(h => {
     const n = weekCount(h, monday(parse(tgtK))), tgt = h.target || 1;
-    if (n < tgt) out.push({ t: h.name, src: `привычка · ${n} из ${tgt} за неделю`, habit: h.id });
+    if (n < tgt) out.push({ t: h.name, from: "habit", src: `${n} из ${tgt} за неделю`, habit: h.id });
   });
   const IDEA = {
     "работа": "30 минут на рост в профессии: курс, автотесты или книга",
@@ -2017,10 +2017,14 @@ function sphereIdeas(s, tgtK) {
     "жена": "Спросить жену, как прошёл день, и выслушать без телефона",
   };
   const idea = IDEA[c] || `15–30 минут на сферу «${s}»`;
-  if (out.length < 4 && !has(idea)) out.push({ t: idea, src: "идея" });
+  if (out.length < 4 && !has(idea)) out.push({ t: idea, from: "idea", src: "" });
   return out.slice(0, 4);
 }
 // Какие сферы поднять в день tgtK: те, кому по норме уже пора, — сильнее всех отставшие первыми
+// Откуда предложение: задача Google, шаг цели, привычка или подсказка самого дашборда (её нет нигде)
+const FROM = { task: "Google Задачи", goal: "Шаг цели", habit: "Привычка", idea: "Подсказка дашборда" };
+const fromLine = x => [FROM[x.from], x.src].filter(Boolean).join(" · ");
+const focusSrc = (x, s) => x.from === "task" ? x.src : `${FROM[x.from]} · ${s}`;
 function balanceRecs(tgtK, rows) {
   const st = settings(), d = parse(tgtK), busy = (st.busyDays || []).includes(dow(d));
   const busyS = (st.spheres || []).find(s => normRu(s) === normRu(st.busyLabel)) || null;
@@ -2061,7 +2065,7 @@ function renderBalance() {
         const j = (S.balAlt[r.s] || 0) % r.ideas.length, x = r.ideas[j], i = S.balIdeas.push({ ...x, s: r.s }) - 1, on = inFocus(x);
         return `<div class="pick"><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "warn-t" : ""}">${agoText(r)} · ${r.touched} из ${r.norm}</span>
           ${r.ideas.length > 1 ? `<button type="button" class="alt" data-balt="${esc(r.s)}" aria-label="Другое дело для сферы «${esc(r.s)}» (${j + 1} из ${r.ideas.length})" title="Другое дело">↻</button>` : ""}</div>
-          <button type="button" class="pi" data-badd="${i}" ${on || full ? "disabled" : ""} aria-label="${on ? "Уже в главном" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(x.src)}</small></span><span class="plus">${on ? "✓" : "+"}</span></button></div>`;
+          <button type="button" class="pi${x.from === "idea" ? " idea" : ""}" data-badd="${i}" ${on || full ? "disabled" : ""} aria-label="${on ? "Уже в главном" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(fromLine(x))}</small></span><span class="plus">${on ? "✓" : "+"}</span></button></div>`;
       }).join("")
       + (full ? `<p class="note" style="margin:0">В главном на ${isT ? "сегодня" : "завтра"} уже три дела.</p>` : "")
     : `<p class="bal-ok">Все сферы в своей норме — можно идти по обычному плану.</p>`;
@@ -2110,7 +2114,7 @@ function addBalanceIdea(i) {
   if (!x || !canWrite()) return;
   const items = (S.data.focus[tgtK] || []).map(f => ({ ...f }));
   if (items.length >= 3) return;
-  items.push({ t: x.t, src: x.src === "идея" ? x.s : x.src, done: false, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, habit: x.habit || null });
+  items.push({ t: x.t, src: focusSrc(x, x.s), done: false, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, habit: x.habit || null });
   op({ t: "focus", date: tgtK, items });
   toast(`В главное на ${tgtK === ymd(todayDate()) ? "сегодня" : "завтра"}: ${x.t}`);
   const task = x.taskId && T.data?.tasks.find(t => t.id === x.taskId);
@@ -2213,7 +2217,7 @@ function wizFocus() {
   const has = c => f.some(x => (c.taskId && x.taskId === c.taskId) || x.t === c.t);
   const cands = [];
   balanceRecs(tgt, balance(tgt)).forEach(r => r.ideas.slice(0, 2).forEach(x =>
-    cands.push({ t: x.t, src: x.taskId ? x.src : r.s, note: `${r.s}${x.taskId && parentOf(taskIndex().byId.get(x.taskId) || {}) ? ` › ${parentOf(taskIndex().byId.get(x.taskId)).title}` : ""} · ${agoText(r)}`, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, stepId: x.stepId || null, habit: x.habit || null, kind: "Упор — сферы, которые давно без внимания" })));
+    cands.push({ t: x.t, src: focusSrc(x, r.s), note: `${FROM[x.from]} · ${r.s}${x.taskId && parentOf(taskIndex().byId.get(x.taskId) || {}) ? ` › ${parentOf(taskIndex().byId.get(x.taskId)).title}` : ""} · ${agoText(r)}`, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, stepId: x.stepId || null, habit: x.habit || null, kind: "Упор — сферы, которые давно без внимания" })));
   stepCatalog().forEach(c => cands.push({ t: c.text, src: c.gt, goal: c.goal, stepId: c.stepId || null, kind: "Шаги целей" }));
   if (T.data) {
     const pr = x => { const d = effDue(x); return !d ? 3 : d < tgt ? 0 : d === tgt ? 1 : 2; };

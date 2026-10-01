@@ -712,3 +712,4 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .sheet .cchip .tick { background:var(--field); }
 .sheet .cchip[aria-pressed="true"] { background:var(--teal-bg); }
 .sheet .cchip[aria-pressed="true"] .tick { background:var(--teal); }
+.bal .pick button.pi.idea { background:none; border:1.5px dashed var(--line2); }
