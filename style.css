@@ -586,6 +586,11 @@ body.noscroll { overflow:hidden; }
 .pray-card span { font-size:13.5px; color:var(--soft); }
 .pray-card .pc-live { font-size:26px; font-weight:700; color:var(--violet); font-variant-numeric:tabular-nums; }
 .pray-card .btn { background:var(--violet); white-space:nowrap; }
+.pray-card.met { background:var(--teal-bg); padding-top:12px; padding-bottom:12px; }
+.pray-card.met b { font-size:15px; color:var(--teal); }
+.pray-card.met .btn { background:transparent; color:var(--teal); }
+.pc-ok { flex:none; display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:var(--teal); }
+.pc-ok svg { width:16px; height:16px; }
 .fgrid label.check { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--soft); font-weight:500; }
 .fgrid label.check input { width:18px; height:18px; accent-color:var(--teal); }
 label.plan-l { display:grid; gap:6px; margin-top:12px; font-size:12.5px; font-weight:500; color:var(--faint); }
@@ -618,7 +623,7 @@ label.plan-l textarea { width:100%; resize:vertical; font-size:15px; line-height
 .pray-input { background:#151B22; border:1px solid #28303A; color:#E6EAF0; border-radius:16px; font-size:40px; font-weight:600;
   width:160px; text-align:center; padding:8px; font-variant-numeric:tabular-nums; }
 .pray-sub { margin:0; font-size:14px; color:#8E99A8; text-align:center; }
-.tl .pray::before { background:var(--violet); }
+.tl .pr::before { background:var(--violet); }
 
 /* ---------- молитвенные нужды ---------- */
 #needs .row { margin-top:0; }

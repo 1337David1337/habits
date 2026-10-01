@@ -1110,9 +1110,9 @@ function renderPlan() {
     const ss = sess(sKey(k, x.from)), stx = { done: " · сделано", started: " · идёт", skipped: " · пропущен", moved: " · перенесён" }[ss?.status] || "";
     add(toMin(x.from), `${hz(x.from)}–${hz(x.to)}`, "slot" + (ss?.status === "done" ? " done" : ""), "Свободный слот", ss?.text ? `${ss.text}${stx}` : "шаг не выбран");
   });
-  (S.data.prayer[k] || []).forEach(x => add(toMin(x.s), hm(toMin(x.s)), "pray done", "Молитва", fmtDur(x.m)));
+  (S.data.prayer[k] || []).forEach(x => add(toMin(x.s), hm(toMin(x.s)), "pr done", "Молитва", fmtDur(x.m)));
   const pr = prRun();
-  if (pr && pr.date === k) add(toMin(pr.s), hm(toMin(pr.s)), "pray", pr.paused ? "Молитва на паузе" : "Молитва идёт", mmss(prElapsed(pr)));
+  if (pr && pr.date === k) add(toMin(pr.s), hm(toMin(pr.s)), "pr", pr.paused ? "Молитва на паузе" : "Молитва идёт", mmss(prElapsed(pr)));
   if (isToday) { const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); ev.push({ t: m + .5, now: true, time: hm(m) }); }
   ev.sort((x, y) => x.t - y.t);
   $("#day-tl").innerHTML = ev.filter(e => !e.now).length
@@ -2221,8 +2221,12 @@ function renderPrayCard() {
   const r = prRun(), hr = new Date().getHours(), tk = ymd(todayDate());
   card.hidden = !r && !(hr >= 3 && hr < 12);
   if (card.hidden) return;
-  const done = prayMinutes(tk), tgt = prTarget();
-  card.innerHTML = r
+  const done = prayMinutes(tk), tgt = prTarget(), met = !r && done >= tgt;
+  // Цель на сегодня закрыта — карточка сворачивается в тихую строку, повторный запуск остаётся
+  card.classList.toggle("met", met);
+  card.innerHTML = met
+    ? `<span class="pc-ok">${CHECK}</span><div class="pc-t"><b>Молитва — цель на сегодня достигнута</b><span>сегодня ${fmtDur(done)} · цель ${tgt} мин</span></div><button type="button" class="btn sm ghost" data-pray="start">Ещё раз</button>`
+    : r
     ? `<div class="pc-t"><b>${r.paused ? "Молитва на паузе" : "Молитва идёт"}</b><span class="pc-live">${mmss(prElapsed(r))}</span></div><button type="button" class="btn" data-pray="open">Открыть</button>`
     : `<div class="pc-t"><b>Молитва</b><span>${done ? `сегодня ${fmtDur(done)} · цель ${tgt} мин` : `цель ${tgt} мин · экран не погаснет`}</span></div><button type="button" class="btn" data-pray="start">Начать</button>`;
 }
