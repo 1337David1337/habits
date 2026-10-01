@@ -652,3 +652,33 @@ ul.needs { list-style:none; margin:10px 0 0; padding:0; }
 .pray-needs li::before { content:"· "; color:#A79BF0; }
 @media (min-width:960px) { .needs-grid { grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:32px; } }
 .md i.nd-dot::before { display:none; }
+
+/* ---------- баланс сфер ---------- */
+.bal-skew { margin:0 0 12px; padding:10px 12px; border-radius:12px; background:var(--amber-bg); color:var(--ink); font-size:14px; line-height:1.4; }
+.bal-rec { display:grid; gap:12px; }
+.bal-rec .br-h { display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin:0; font-size:13px; color:var(--faint); }
+.bal-rec .br-h b { font-size:15px; font-weight:600; color:var(--ink); }
+.bal-rec .br-h b::first-letter { text-transform:uppercase; }
+.bal-rec .br-h span { text-align:right; }
+.bal-ok { margin:0; padding:10px 12px; border-radius:12px; background:var(--teal-bg); color:var(--teal); font-size:14px; }
+ul.bal-list { list-style:none; margin:16px 0 0; padding:12px 0 0; border-top:1px solid var(--line); display:grid; gap:2px; }
+.bal-list button { display:grid; grid-template-columns:76px auto minmax(0,1fr); gap:10px; align-items:center;
+  border:0; background:none; padding:6px 8px; margin:0 -8px; width:calc(100% + 16px); border-radius:10px; text-align:left; }
+.bal-list button[aria-pressed="true"] { background:var(--teal-bg); }
+.bal-list .bn { font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bal-list .bn::first-letter { text-transform:uppercase; }
+.bal-list .bd { display:flex; gap:3px; }
+.bal-list .bd i { width:12px; height:12px; border-radius:4px; background:var(--s0); }
+.bal-list .bd i.on { background:var(--s3); }
+.bal-list .bd i.t { box-shadow:inset 0 0 0 1.5px var(--line2); }
+.bal-list .bd i.on.t { box-shadow:none; background:var(--s4); }
+.bal-list .bs { font-size:12.5px; color:var(--faint); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bal-list button[aria-pressed="true"] .bs { color:var(--teal); font-weight:500; }
+.bal-tags { margin-top:12px; border-top:1px solid var(--line); padding-top:10px; }
+.bal-tags summary { cursor:pointer; font-size:13.5px; font-weight:500; color:var(--soft); }
+.bal-tags ul { list-style:none; margin:8px 0 0; padding:0; }
+.bal-tags li { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); font-size:14px; }
+.bal-tags li:last-child { border-bottom:0; }
+.bal-tags li small { display:block; font-size:12px; color:var(--faint); }
+.bal-tags select { flex:none; max-width:42%; }
+.bal .pick button.pi { background:var(--field); }

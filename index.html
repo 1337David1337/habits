@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -90,6 +90,14 @@
         <section class="card" id="focus-card">
           <div class="card-h"><h2>Главное на сегодня</h2><small id="focus-count"></small></div>
           <ul class="focus" id="focus-list"></ul>
+        </section>
+        <section class="card bal" id="bal-card" hidden>
+          <div class="card-h"><h2 id="bal-title">Упор на завтра</h2><small>баланс сфер за 7 дней</small></div>
+          <p class="bal-skew" id="bal-skew" hidden></p>
+          <div class="bal-rec" id="bal-rec"></div>
+          <ul class="bal-list" id="bal-list"></ul>
+          <p class="note">Нажми на сферу, если сегодня уделил ей время, а в привычках и задачах этого не видно. Сами считаются привычки, сделанные задачи и главное, время вдвоём, молитва и вечера в церкви.</p>
+          <details class="bal-tags" id="bal-tags" hidden><summary>Сферы задач</summary><ul></ul></details>
         </section>
         <section class="card">
           <div class="card-h"><h2>Привычки</h2><small id="hab-count"></small></div>
@@ -539,6 +547,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=23"></script>
+<script src="app.js?v=24"></script>
 </body>
 </html>

@@ -111,6 +111,12 @@ function applyOp(d, op) {
     if (!op.items || !op.items.length) delete d.prayer[op.date]; else d.prayer[op.date] = op.items;
   } else if (op.t === "focus") {
     if (!op.items || !op.items.length) delete d.focus[op.date]; else d.focus[op.date] = op.items;
+  } else if (op.t === "care") {
+    const list = (d.care[op.date] || []).filter(s => s !== op.sphere);
+    if (op.val) list.push(op.sphere);
+    if (list.length) d.care[op.date] = list; else delete d.care[op.date];
+  } else if (op.t === "tag") {
+    if (op.sphere == null) delete d.tags[op.id]; else d.tags[op.id] = op.sphere;
   } else if (op.t === "ritual") {
     const box = d.rituals[op.kind] || (d.rituals[op.kind] = {});
     if (op.time == null) delete box[op.date]; else box[op.date] = op.time;
@@ -126,7 +132,7 @@ function normalize(d) {
     habits: Array.isArray(d.habits) ? d.habits : [], log: obj(d.log), kid: obj(d.kid),
     me: obj(d.me), together: obj(d.together), reviews: obj(d.reviews), goals: Array.isArray(d.goals) ? d.goals : [],
     sessions: obj(d.sessions), focus: obj(d.focus), rituals: obj(d.rituals), prayer: obj(d.prayer),
-    needs: Array.isArray(d.needs) ? d.needs : [] };
+    needs: Array.isArray(d.needs) ? d.needs : [], care: obj(d.care), tags: obj(d.tags) };
 }
 function recompute() {
   S.memo = null; S.recMemo = new Map();
@@ -210,6 +216,8 @@ function commitMsg(ops) {
   if (ops.some(o => o.t === "need")) parts.push(ops.some(o => o.t === "need" && o.data?.answered) ? "ответ на молитву" : "молитвенные нужды");
   ops.filter(o => o.t === "prayer").forEach(o => parts.push(`Молитва ${fmtDM.format(parse(o.date))}: ${(o.items || []).reduce((a, x) => a + x.m, 0)} мин`));
   if (ops.some(o => o.t === "ritual")) parts.push("вечерние 5 минут");
+  if (ops.some(o => o.t === "care")) parts.push("баланс сфер");
+  if (ops.some(o => o.t === "tag")) parts.push("сферы задач");
   if (ops.some(o => o.t === "habit" || o.t === "del")) parts.push("настройка привычек");
   if (ops.some(o => o.t === "settings")) parts.push("настройки");
   return parts.join("; ") || "Обновление";
@@ -559,7 +567,7 @@ function render() {
   if (!S.data) return;
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
-  renderStepOptions(); renderRitualCard(); renderSlotCard(); renderFocus(); renderSlotPlan(); renderFocusTime();
+  renderStepOptions(); renderRitualCard(); renderSlotCard(); renderFocus(); renderBalance(); renderSlotPlan(); renderFocusTime();
   renderPrayCard(); renderPrayStats(); renderPraySettings(); renderNeeds();
 }
 function renderHeader() {
@@ -1040,7 +1048,7 @@ async function loadTasks(force) {
     T.error = null;
   } catch (e) { T.error = e; }
   T.loadedAt = Date.now(); T.loading = false;
-  renderPlan(); renderSystem(); renderSettingsPanel();
+  renderPlan(); renderBalance(); renderSystem(); renderSettingsPanel();
 }
 function tasksError() {
   if (!T.error) return "";
@@ -1062,6 +1070,7 @@ async function taskSet(task, done) {
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     lsSet(LS.tasks, T.data);
+    renderBalance();
     if (done) toast(`Готово: ${task.title}`, () => taskSet(task, false));
   } catch (e) {
     Object.assign(task, before);
@@ -1849,6 +1858,190 @@ function toggleFocus(i) {
   if (task && (task.status === "completed") !== it.done) taskSet(task, it.done);
 }
 
+/* ---------- баланс сфер ---------- */
+// Сфера задачи угадывается по словам названия; ручная правка хранится в tags.<id задачи>.
+// Слово с «=» совпадает только целиком, остальные — как начало слова.
+const SPHERE_ALIASES = {
+  "работа": ["работа", "карьера", "рост", "учеба", "профессия"], "жена": ["жена", "брак", "муж"],
+  "ребенок": ["ребенок", "дети", "сын", "дочь"], "церковь": ["церковь", "вера", "служение", "бог"],
+  "деньги": ["деньги", "финансы"], "здоровье": ["здоровье", "спорт", "тело"], "дом": ["дом", "быт", "машина"], "семья": ["семья"],
+};
+const SPHERE_WORDS = {
+  "работа": ["=работа", "=работе", "=работу", "=работы", "рабоч", "тест", "автотест", "автоматиз", "python", "питон", "pytest", "sql", "postman", "курс", "урок", "=дз", "=вш",
+    "учеб", "книг", "читат", "прочит", "резюме", "собес", "англ", "english", "jira", "ревью", "созвон", "отчет", "вебинар", "лекци"],
+  "жена": ["жен", "свидан", "вдвоем", "цвет", "подар", "годовщин", "кафе", "ресторан"],
+  "ребенок": ["ребен", "сын", "малыш", "детск", "=дети", "детей", "коляск", "прививк", "педиатр", "игрушк", "подгуз", "памперс", "пюре", "садик"],
+  "церковь": ["церк", "служен", "молит", "молил", "молис", "библи", "проповед", "пастор", "=хор", "поклонен", "общин", "=дг"],
+  "деньги": ["деньг", "денег", "кредит", "оплат", "заплат", "плати", "платеж", "налог", "банк", "бюджет", "трат", "подписк", "перевест",
+    "счет", "долг", "зарплат", "вклад", "копил", "накоп", "ипотек", "страхов", "рубл", "инвест", "продат", "кэшбэк"],
+  "здоровье": ["врач", "зуб", "стомат", "спорт", "трениров", "=бег", "пробеж", "=зал", "спортзал", "анализ", "здоров", "витамин", "отжим",
+    "присед", "зарядк", "=сон", "поспат", "=лечь", "больниц", "поликлин", "медосмотр", "таблет", "диет", "растяжк"],
+  "дом": ["ремонт", "убор", "убрат", "квартир", "стекл", "машин", "=авто", "автосерв", "ручник", "трос", "шин", "колес", "мастер", "полк",
+    "почин", "стирк", "постир", "посуд", "гараж", "мебел", "розетк", "лампочк", "сантехн", "окн", "дач", "мусор", "пылесос", "двер", "=сто", "масл"],
+};
+SPHERE_WORDS["семья"] = [...SPHERE_WORDS["жена"], ...SPHERE_WORDS["ребенок"], "мам", "пап", "родител", "брат", "сестр", "бабушк", "дедушк", "семь"];
+const normRu = s => String(s || "").toLowerCase().replace(/ё/g, "е");
+const canonOf = s => { const n = normRu(s).trim(); return Object.keys(SPHERE_ALIASES).find(k => SPHERE_ALIASES[k].includes(n)) || null; };
+const sphereByCanon = c => (settings().spheres || []).find(s => canonOf(s) === c) || null;
+function sphereOfText(text) {
+  const words = normRu(text).split(/[^a-z0-9а-я]+/).filter(Boolean), kid = normRu(kidName());
+  let best = null, top = 0;
+  for (const s of settings().spheres || []) {
+    const c = canonOf(s), stems = c ? [...SPHERE_WORDS[c] || [], "=" + normRu(s)] : [normRu(s).slice(0, 5)];
+    if ((c === "ребенок" || c === "семья") && kid.length > 2) stems.push(kid);
+    const hits = words.filter(w => stems.some(st => st[0] === "=" ? w === st.slice(1)
+      : st === kid ? w.startsWith(st) && w.length <= st.length + 2 : w.startsWith(st))).length;
+    if (hits > top) { top = hits; best = s; }
+  }
+  return best;
+}
+function taskSphere(x) {
+  const tag = S.data?.tags?.[x.id];
+  if (tag !== undefined) return tag || null;
+  return sphereOfText(x.title) || sphereOfText(x.list);
+}
+// Что было сделано в каждой сфере по дням: { сфера: { дата: [что] } }
+function sphereActivity(from, to) {
+  const st = settings(), act = {}, tk = ymd(todayDate());
+  (st.spheres || []).forEach(s => { act[s] = {}; });
+  const put = (s, k, what) => { if (s && act[s] && k >= from && k <= to) (act[s][k] ||= []).push(what); };
+  const goalSphere = id => (S.data.goals || []).find(g => g.id === id)?.sphere || null;
+  for (const [k, day] of Object.entries(S.data.log)) for (const hid of Object.keys(day)) {
+    const h = habits().find(x => x.id === hid); if (h) put(h.sphere, k, h.name);
+  }
+  const wife = sphereByCanon("жена") || sphereByCanon("семья"), church = sphereByCanon("церковь");
+  Object.keys(S.data.together).forEach(k => put(wife, k, "время вдвоём"));
+  Object.keys(S.data.prayer).forEach(k => put(church, k, "молитва"));
+  const busyS = (st.spheres || []).find(s => normRu(s) === normRu(st.busyLabel)) || null;
+  for (let d = parse(from); ymd(d) <= to; d = addDays(d, 1)) {
+    const k = ymd(d);
+    if ((st.busyDays || []).includes(dow(d)) && (k < tk || new Date().getHours() >= 19)) put(busyS, k, st.busyLabel);
+  }
+  for (const [k, list] of Object.entries(S.data.care)) list.forEach(s => put(s, k, "отмечено вручную"));
+  for (const [key, s] of Object.entries(S.data.sessions)) if (s.status === "done") put(goalSphere(s.goal), key.slice(0, 10), s.text);
+  for (const [k, items] of Object.entries(S.data.focus)) items.forEach(x => {
+    if (x.done && !x.taskId) put(goalSphere(x.goal) || sphereOfText(x.t), k, x.t);
+  });
+  (T.data?.tasks || []).forEach(x => { if (x.status === "completed" && x.completed) put(taskSphere(x), ymd(new Date(x.completed)), x.title); });
+  return act;
+}
+function balance(tgtK) {
+  const tk = ymd(todayDate()), act = sphereActivity(addDaysK(tk, -29), tk);
+  const week = Array.from({ length: 7 }, (_, i) => addDaysK(tk, i - 6));
+  return (settings().spheres || []).map(s => {
+    const days = act[s], keys = Object.keys(days).sort(), last = keys[keys.length - 1] || null;
+    return { s, days, week: week.map(k => ({ k, what: days[k] || null })), touched: week.filter(k => days[k]).length, last,
+      ago: last ? Math.round((parse(tgtK) - parse(last)) / 864e5) : null, cared: (S.data.care[tk] || []).includes(s) };
+  });
+}
+function sphereIdeas(s, tgtK) {
+  const out = [], c = canonOf(s), tk = ymd(todayDate()), has = t => out.some(x => x.t === t);
+  if (c === "жена") {
+    const tg = togetherInfo();
+    if (tg.days == null || tg.days >= tg.gap)
+      out.push({ t: `Время вдвоём, когда ${kidName()} уснёт: чай и разговор без телефонов`, src: tg.days == null ? "время вдвоём ещё не отмечалось" : `вдвоём были ${tg.days} ${plural(tg.days, "день", "дня", "дней")} назад` });
+  }
+  if (T.data) {
+    const pr = x => !x.due ? 2 : x.due <= tgtK ? 0 : 1;
+    T.data.tasks.filter(x => x.status !== "completed" && taskSphere(x) === s && (!x.due || x.due <= addDaysK(tgtK, 7)))
+      .sort((a, b) => pr(a) - pr(b) || ((a.due || "") < (b.due || "") ? -1 : 1)).slice(0, 2)
+      .forEach(x => out.push({ t: x.title, src: `${x.list}${x.due ? ` · срок ${fmtDM.format(parse(x.due))}` : ""}`, taskId: x.id, listId: x.listId }));
+  }
+  goalsActive().filter(g => g.sphere === s).forEach(g => { const nx = nextStepOf(g); if (nx && !has(nx.text)) out.push({ t: nx.text, src: `шаг цели «${g.title}»`, goal: g.id, stepId: nx.stepId || null }); });
+  active().filter(h => h.sphere === s).forEach(h => {
+    const n = weekCount(h, monday(parse(tgtK))), tgt = h.target || 1;
+    if (n < tgt) out.push({ t: h.name, src: `привычка · ${n} из ${tgt} за неделю`, habit: h.id });
+  });
+  const IDEA = {
+    "работа": "30 минут на рост в профессии: курс, автотесты или книга",
+    "ребенок": `Полчаса для ${kidGen()} без телефона: прогулка, игра, купание`,
+    "церковь": "Написать или позвонить кому-то из домашней группы",
+    "деньги": "10 минут на деньги: записать траты, сверить бюджет",
+    "здоровье": "Прогулка 20 минут или лечь до 23:00",
+    "дом": "15 минут на одно мелкое дело по дому",
+    "семья": "Время с семьёй без телефона",
+    "жена": "Спросить жену, как прошёл день, и выслушать без телефона",
+  };
+  if (!out.length) out.push({ t: IDEA[c] || `15–30 минут на сферу «${s}»`, src: "идея — в задачах этой сферы пока ничего нет" });
+  return out.slice(0, 2);
+}
+// Какие сферы поднять в день tgtK: дольше всех без внимания, меньше всего дней за неделю
+function balanceRecs(tgtK, rows) {
+  const st = settings(), d = parse(tgtK), busy = (st.busyDays || []).includes(dow(d));
+  const busyS = (st.spheres || []).find(s => normRu(s) === normRu(st.busyLabel)) || null;
+  const free = slotsOn(d).length > 0 || !(st.work?.days || []).includes(dow(d));
+  const n = busy ? 1 : free ? 3 : 2, need = r => (r.ago ?? 31) + (7 - r.touched) / 2;
+  return rows.filter(r => (r.ago == null || r.ago >= 2) && !(busy && r.s === busyS))
+    .sort((a, b) => need(b) - need(a)).slice(0, n).map(r => ({ ...r, ideas: sphereIdeas(r.s, tgtK) }));
+}
+const agoText = r => r.ago == null ? "давно без внимания" : r.ago === 1 ? "вчера" : r.ago === 0 ? "сегодня" : `${r.ago} ${plural(r.ago, "день", "дня", "дней")} без внимания`;
+function renderBalance() {
+  const card = $("#bal-card"), sp = settings().spheres || [];
+  card.hidden = !sp.length;
+  if (!sp.length) return;
+  const tgt = planTarget(), tgtK = ymd(tgt), tk = ymd(todayDate()), isT = tgtK === tk, rows = balance(tgtK), st = settings();
+  $("#bal-title").textContent = isT ? "Упор на сегодня" : "Упор на завтра";
+  const top = [...rows].sort((a, b) => b.touched - a.touched)[0], zero = rows.filter(r => !r.touched);
+  $("#bal-skew").innerHTML = top && top.touched >= 4 && zero.length
+    ? `Перекос: «${esc(top.s)}» — ${top.touched} из 7 дней, а ${zero.map(r => `«${esc(r.s)}»`).join(", ")} — ни разу.`
+    : !zero.length ? "За неделю внимание получила каждая сфера — держи ритм." : "";
+  $("#bal-skew").hidden = !$("#bal-skew").innerHTML;
+  const recs = balanceRecs(tgtK, rows), focus = S.data.focus[tgtK] || [], full = focus.length >= 3;
+  const inFocus = x => focus.some(f => (x.taskId && f.taskId === x.taskId) || f.t === x.t);
+  const busy = (st.busyDays || []).includes(dow(tgt)) && st.busyLabel;
+  S.balIdeas = [];
+  $("#bal-rec").innerHTML = recs.length
+    ? (busy ? `<p class="note" style="margin:0">${isT ? "Сегодня" : "Завтра"} вечер — ${esc(st.busyLabel)}, поэтому одно короткое дело.</p>` : "")
+      + recs.map(r => `<div class="pick"><p class="br-h"><b>${esc(r.s)}</b><span class="${r.ago == null || r.ago >= 5 ? "warn-t" : ""}">${agoText(r)} · ${r.touched} из 7 дн.</span></p>`
+        + r.ideas.map(x => { const i = S.balIdeas.push({ ...x, s: r.s }) - 1, on = inFocus(x);
+          return `<button type="button" class="pi" data-badd="${i}" ${on || full ? "disabled" : ""} aria-label="${on ? "Уже в главном" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(x.src)}</small></span><span class="plus">${on ? "✓" : "+"}</span></button>`; }).join("")
+        + `</div>`).join("")
+      + (full ? `<p class="note" style="margin:0">В главном на ${isT ? "сегодня" : "завтра"} уже три дела.</p>` : "")
+    : `<p class="bal-ok">Все сферы получали внимание в последние дни. Можно идти по обычному плану.</p>`;
+  const DW = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+  $("#bal-list").innerHTML = rows.map(r => `<li><button type="button" data-care="${esc(r.s)}" aria-pressed="${r.cared}" title="Отметить: сегодня уделил время сфере «${esc(r.s)}»">
+    <span class="bn">${esc(r.s)}</span>
+    <span class="bd" aria-hidden="true">${r.week.map(x => `<i class="${x.what ? "on" : ""}${x.k === tk ? " t" : ""}" title="${DW[dow(parse(x.k))]}${x.what ? ": " + esc([...new Set(x.what)].join(", ")) : ""}"></i>`).join("")}</span>
+    <span class="bs">${r.cared ? "отмечено сегодня" : `${r.touched} из 7 · ${r.last ? r.last === tk ? "сегодня" : r.last === addDaysK(tk, -1) ? "вчера" : fmtDM.format(parse(r.last)) : "—"}`}</span>
+  </button></li>`).join("");
+  renderBalanceTags();
+}
+function renderBalanceTags() {
+  const box = $("#bal-tags");
+  if (!T.data) { box.hidden = true; return; }
+  const from = addDaysK(ymd(todayDate()), -6);
+  const list = T.data.tasks.filter(x => x.status !== "completed" || (x.completed && ymd(new Date(x.completed)) >= from));
+  const rows = list.map(x => ({ x, s: taskSphere(x), tagged: S.data.tags[x.id] !== undefined }))
+    .sort((a, b) => (a.s ? 1 : 0) - (b.s ? 1 : 0)).slice(0, 30);
+  const none = list.filter(x => !taskSphere(x)).length;
+  box.hidden = !list.length;
+  box.querySelector("summary").innerHTML = `Сферы задач${none ? ` · <span class="warn-t">без сферы: ${none}</span>` : ""}`;
+  box.querySelector("ul").innerHTML = rows.map(({ x, s, tagged }) => `<li><span>${esc(x.title)}<small>${esc(x.list)}${tagged ? "" : s ? " · угадано" : ""}</small></span>
+    <select class="field mini" data-tag="${esc(x.id)}" aria-label="Сфера задачи «${esc(x.title)}»">${sphereOptions(s)}</select></li>`).join("");
+}
+function addBalanceIdea(i) {
+  const x = S.balIdeas?.[i], tgtK = ymd(planTarget());
+  if (!x || !canWrite()) return;
+  const items = (S.data.focus[tgtK] || []).map(f => ({ ...f }));
+  if (items.length >= 3) return;
+  items.push({ t: x.t, src: x.src.startsWith("идея") ? x.s : x.src, done: false, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null });
+  op({ t: "focus", date: tgtK, items });
+  toast(`В главное на ${tgtK === ymd(todayDate()) ? "сегодня" : "завтра"}: ${x.t}`);
+  const task = x.taskId && T.data?.tasks.find(t => t.id === x.taskId);
+  if (task && task.due !== tgtK) taskDue(task, tgtK).then(renderPlan)
+    .catch(() => notice("Дату в Google Задачах поставить не удалось. Обнови скрипт google-tasks.gs и сделай новую версию развёртывания — см. «Настройки → Google Задачи»."));
+}
+document.addEventListener("click", e => {
+  const c = e.target.closest("[data-care]");
+  if (c) { if (canWrite()) { const tk = ymd(todayDate()); op({ t: "care", date: tk, sphere: c.dataset.care, val: !(S.data.care[tk] || []).includes(c.dataset.care) }); } return; }
+  const b = e.target.closest("[data-badd]");
+  if (b && !b.disabled) addBalanceIdea(Number(b.dataset.badd));
+});
+$("#bal-tags").addEventListener("change", e => {
+  const el = e.target.closest("[data-tag]");
+  if (el && canWrite()) op({ t: "tag", id: el.dataset.tag, sphere: el.value });
+});
+
 /* ---------- время на цели ---------- */
 function slotStats(from, to) {
   const t = todayDate(), m = nowMin(), r = { avail: 0, done: 0, count: 0, doneN: 0, skipped: 0, byGoal: {} };
@@ -1918,6 +2111,8 @@ function wizFocus() {
   const tgt = W.st.target, isT = tgt === ymd(todayDate()), f = W.st.focus, full = f.length >= 3;
   const has = c => f.some(x => (c.taskId && x.taskId === c.taskId) || x.t === c.t);
   const cands = [];
+  balanceRecs(tgt, balance(tgt)).forEach(r => r.ideas.forEach(x =>
+    cands.push({ t: x.t, src: `${r.s} · ${agoText(r)}`, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, stepId: x.stepId || null, kind: "Упор — сферы, которые давно без внимания" })));
   stepCatalog().forEach(c => cands.push({ t: c.text, src: c.gt, goal: c.goal, stepId: c.stepId || null, kind: "Шаги целей" }));
   if (T.data) {
     const open = T.data.tasks.filter(x => x.status !== "completed");
