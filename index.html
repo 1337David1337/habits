@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -92,12 +92,9 @@
           <ul class="focus" id="focus-list"></ul>
         </section>
         <section class="card bal" id="bal-card" hidden>
-          <div class="card-h"><h2 id="bal-title">Упор на завтра</h2><small>баланс сфер за 7 дней</small></div>
+          <div class="card-h"><h2 id="bal-title">Упор на завтра</h2><a class="aside" href="#results" id="bal-more">баланс сфер →</a></div>
           <p class="bal-skew" id="bal-skew" hidden></p>
           <div class="bal-rec" id="bal-rec"></div>
-          <ul class="bal-list" id="bal-list"></ul>
-          <p class="note">Нажми на сферу, если сегодня уделил ей время, а в привычках и задачах этого не видно. Сами считаются привычки, сделанные задачи и главное, время вдвоём, молитва и вечера в церкви.</p>
-          <details class="bal-tags" id="bal-tags" hidden><summary>Сферы задач</summary><ul></ul></details>
         </section>
         <section class="card">
           <div class="card-h"><h2>Привычки</h2><small id="hab-count"></small></div>
@@ -257,6 +254,17 @@
         </div>
         <div class="scroll"><table class="week" id="week-table"></table></div>
         <p class="note">Прошлые дни можно отметить задним числом. Норма считается на неделю, а не на каждый день.</p>
+      </section>
+
+      <section class="card span2 bal" id="balance" hidden>
+        <div class="card-h"><h2>Баланс сфер</h2><small>последние 7 дней</small></div>
+        <p class="bal-skew" id="bl-skew" hidden></p>
+        <ul class="bal-list" id="bl-list"></ul>
+        <p class="note">«2 из 5» — сколько дней сфера получала время и норма дней в неделю. Норму можно поменять: от неё зависит, какие сферы попадут в «Упор на завтра».</p>
+        <p class="pick-h">Сегодня уделил время</p>
+        <div id="bl-care"></div>
+        <p class="note">Само отмечается по привычкам, сделанным задачам и главному, шагам в слотах, времени вдвоём, молитве и вечерам в церкви. Остальное отметь здесь или в «Вечерних 5 минутах».</p>
+        <details class="bal-tags" id="bal-tags" hidden><summary>Сферы задач</summary><ul></ul></details>
       </section>
 
       <section class="card span2" id="progress">
@@ -547,6 +555,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>
