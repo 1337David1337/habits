@@ -779,3 +779,10 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .splan li { grid-template-columns:120px minmax(0,1fr); }
 @media (max-width:420px) { .splan li { grid-template-columns:minmax(0,1fr); } }
 .sheet ul.splan.card { padding:12px 14px; }
+
+/* ---------- демо ---------- */
+.demo-bar { display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; margin:4px 0 10px; padding:10px 14px; border-radius:14px;
+  background:var(--amber-bg); color:var(--ink); font-size:13.5px; line-height:1.4; }
+.demo-bar b { color:var(--amber); }
+.demo-bar span { flex:1 1 200px; color:var(--soft); }
+.demo-bar a { font-weight:600; color:var(--amber); }

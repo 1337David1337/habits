@@ -1,5 +1,12 @@
 (() => {
 "use strict";
+// Демо (?demo): вымышленная семья, хранилище в памяти вкладки, сеть подменена — см. demo-data.js.
+// Настоящий вход и данные на этом устройстве демо не трогает
+const DEMO = /[?&]demo(?:[=&]|$)/.test(location.search) && !!window.KeelDemo;
+const store = (() => {
+  if (DEMO) return window.KeelDemo.install();
+  try { return window.localStorage; } catch { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; }
+})();
 const DOW = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="var(--pine-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -34,8 +41,8 @@ function plural(n, one, few, many) {
   if (b >= 2 && b <= 4) return few;
   return many;
 }
-function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
-function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function lsGet(k) { try { return JSON.parse(store.getItem(k)); } catch { return null; } }
+function lsSet(k, v) { try { v == null ? store.removeItem(k) : store.setItem(k, JSON.stringify(v)); } catch {} }
 const clone = o => JSON.parse(JSON.stringify(o));
 const pct = v => v == null ? "—" : Math.round(v * 100) + "%";
 const num = v => v < 10 && Math.abs(v - Math.round(v)) > .05 ? v.toFixed(1).replace(".", ",") : String(Math.round(v));
@@ -2529,8 +2536,8 @@ $("#rv-start").addEventListener("click", () => openWizard("weekly"));
 // Идущий таймер живёт в localStorage этого устройства: {start, paused, idle, point, marks[], chimed, date, s}
 const PR_KEY = "habits.prayer";
 let prTick = null, wakeLock = null, audioCtx = null;
-function prRun() { try { return JSON.parse(localStorage.getItem(PR_KEY)); } catch { return null; } }
-function prSave(v) { try { v ? localStorage.setItem(PR_KEY, JSON.stringify(v)) : localStorage.removeItem(PR_KEY); } catch {} }
+function prRun() { try { return JSON.parse(store.getItem(PR_KEY)); } catch { return null; } }
+function prSave(v) { try { v ? store.setItem(PR_KEY, JSON.stringify(v)) : store.removeItem(PR_KEY); } catch {} }
 function prElapsed(r = prRun()) { return r ? Math.max(0, (r.paused || Date.now()) - r.start - (r.idle || 0)) : 0; }
 const mmss = ms => { const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60); return h ? `${h}:${pad(m)}:${pad(t % 60)}` : `${m}:${pad(t % 60)}`; };
 const prTarget = () => settings().prayerTarget || 15;
@@ -2805,10 +2812,10 @@ $("#need-list").addEventListener("submit", e => {
 });
 
 /* ---------- тема ---------- */
-function themeChoice() { try { const t = localStorage.getItem("habits.theme"); return t === "light" || t === "dark" ? t : "auto"; } catch { return "auto"; } }
+function themeChoice() { try { const t = store.getItem("habits.theme"); return t === "light" || t === "dark" ? t : "auto"; } catch { return "auto"; } }
 function applyTheme(t) {
   if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
-  try { t === "auto" ? localStorage.removeItem("habits.theme") : localStorage.setItem("habits.theme", t); } catch {}
+  try { t === "auto" ? store.removeItem("habits.theme") : store.setItem("habits.theme", t); } catch {}
   const dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => { m.content = dark ? "#0F1216" : "#EEF1F4"; });
   document.querySelectorAll("#theme-seg button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.themeOpt === t)));
@@ -2850,6 +2857,12 @@ document.addEventListener("visibilitychange", () => {
 });
 addEventListener("online", () => { if (S.cfg) S.pending.length ? flush() : refresh(); });
 
+if (DEMO) {
+  const bar = document.createElement("div");
+  bar.className = "demo-bar";
+  bar.innerHTML = `<b>Демо Keel</b><span>Вымышленная семья. Можно нажимать всё — ничего не сохраняется.</span><a href="./">Выйти</a>`;
+  $("#notice").before(bar);
+}
 recompute();
 if (!S.cfg) $("#connect-panel").open = true;
 if (S.cfg && S.pending.length) setSync("pending");

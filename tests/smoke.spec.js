@@ -105,3 +105,24 @@ test("«План → Слоты на неделю»: только выбор п�
   await expect(list.locator("select[data-plan-key]").first()).toBeVisible();
   await expect(list.locator("select[data-plan-key]").first().locator("optgroup")).toHaveCount(2);
 });
+
+test("демо: вымышленные данные, настоящий вход и сеть не трогаются", async ({ page }) => {
+  const net = [], errors = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await page.addInitScript(() => {
+    localStorage.setItem("habits.cfg", JSON.stringify({ repo: "real/data", token: "REAL" }));
+    localStorage.setItem("habits.base", "REAL-BASE");
+  });
+  await page.route(/api\.github\.com|script\.google\.com/, route => { net.push(route.request().url()); return route.abort(); });
+  await page.goto("/?demo#today");
+  await expect(page.locator(".demo-bar")).toBeVisible();
+  await expect(page.locator("#today-list button[data-hid]").first()).toBeVisible();
+  await expect(page.locator("#plan-tasks")).toContainText("Машина к зиме");
+  await page.locator('#today-list button[data-hid="read"]').click();
+  await expect(page.locator('#today-list button[data-hid="read"]')).toHaveAttribute("aria-pressed", "true");
+  await page.waitForTimeout(1600);
+  expect(await page.evaluate(() => [localStorage.getItem("habits.cfg"), localStorage.getItem("habits.base"), localStorage.getItem("habits.pending")]))
+    .toEqual([JSON.stringify({ repo: "real/data", token: "REAL" }), "REAL-BASE", null]);
+  expect(net).toEqual([]);
+  expect(errors).toEqual([]);
+});
