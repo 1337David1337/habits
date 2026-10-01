@@ -1,0 +1,11 @@
+{
+  "name": "habits",
+  "private": true,
+  "description": "Дашборд-трекер привычек. Зависимости нужны только для смоук-тестов.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

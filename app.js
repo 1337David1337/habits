@@ -864,16 +864,16 @@ function renderWeek() {
   const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
   const mark = i => busy.has(i) && st.busyLabel ? esc(st.busyLabel) : "&nbsp;";
   const head = `<thead><tr><th scope="col">Привычка</th>${days.map((d, i) =>
-    `<th scope="col" class="${ymd(d) === tk ? "is-today" : ""}">${DOW[i]} ${d.getDate()}<span class="ch">${mark(i)}</span></th>`).join("")}<th scope="col">Итог</th></tr></thead>`;
+    `<th scope="col" class="${ymd(d) === tk ? "is-today" : ""}">${DOW[i]} ${d.getDate()}<span class="ch">${mark(i)}</span></th>`).join("")}</tr></thead>`;
   const hs = active();
-  const body = !hs.length ? `<tr><td colspan="9" class="empty">Привычек пока нет.</td></tr>` : hs.map(h => {
+  const body = !hs.length ? `<tr><td colspan="8" class="empty">Привычек пока нет.</td></tr>` : hs.map(h => {
     const ws = weekStatus(h, mon);
     const cells = days.map(d => {
       const k = ymd(d), on = isDone(k, h.id), future = d > t;
       return `<td class="${k === tk ? "today-col" : ""}"><button type="button" class="cell" aria-pressed="${on}" ${future ? "disabled" : ""}
         data-toggle data-date="${k}" data-hid="${esc(h.id)}" aria-label="${esc(h.name)}, ${fmtShort.format(d)}" title="${fmtShort.format(d)}">${CHECK}</button></td>`;
     }).join("");
-    return `<tr><td class="name">${esc(h.name)}<small>норма ${ws.target} в нед.</small></td>${cells}<td class="sum ${ws.cls}">${ws.count}/${ws.target}</td></tr>`;
+    return `<tr><td class="name">${esc(h.name)}<small class="${ws.cls}-t">${ws.count} из ${ws.target} за неделю</small></td>${cells}</tr>`;
   }).join("");
   $("#week-table").innerHTML = head + `<tbody>${body}</tbody>`;
 }
@@ -1072,7 +1072,11 @@ const actionable = x => x.status !== "completed" && parentOf(x)?.status !== "com
 // «Когда-нибудь» и «Ожидание» — не действия: их задачи не предлагаем, пока на обзоре недели
 // не перенесёшь в проекты или следующие действия
 const PARKED = /когда.?нибудь|someday|может.?быть|maybe|ожидани|^жду|waiting/i;
-const parked = x => PARKED.test(x.list || "");
+// Что делать со списком: сфера, "" — угадывать по словам, "__parked" — не предлагать.
+// Выбор в «План → Баланс сфер» хранится в settings.listSpheres; без него парковку узнаём по названию
+const listMode = title => { const m = settings().listSpheres || {}; return Object.hasOwn(m, title) ? m[title] : PARKED.test(title || "") ? "__parked" : ""; };
+const listSphere = title => { const v = listMode(title); return v && v !== "__parked" && (settings().spheres || []).includes(v) ? v : null; };
+const parked = x => listMode(x.list) === "__parked";
 function taskSrc(x) {
   const p = parentOf(x), d = effDue(x);
   return `${x.list}${p ? ` › ${p.title}` : ""}${d ? ` · срок ${fmtDM.format(parse(d))}` : ""}`;
@@ -1119,6 +1123,8 @@ function nextSlot(d) {
   for (let i = 1; i <= 7; i++) { const x = addDays(d, i), sl = slotsOn(x); if (sl.length) return { date: x, ...sl[0] }; }
   return null;
 }
+S.dayOpen = lsGet("habits.dayOpen") === true;
+$("#day-toggle").addEventListener("click", () => { S.dayOpen = !S.dayOpen; lsSet("habits.dayOpen", S.dayOpen || null); renderPlan(); });
 const dayOffset = () => S.dayOff ?? (new Date().getHours() >= 19 ? 1 : 0);
 const hz = x => String(x).replace(/^0(\d)/, "$1");
 function renderPlan() {
@@ -1151,6 +1157,13 @@ function renderPlan() {
   if (pr && pr.date === k) add(toMin(pr.s), hm(toMin(pr.s)), "pr", pr.paused ? "Молитва на паузе" : "Молитва идёт", mmss(prElapsed(pr)));
   if (isToday) { const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); ev.push({ t: m + .5, now: true, time: hm(m) }); }
   ev.sort((x, y) => x.t - y.t);
+  const nowT = isToday ? ev.find(e => e.now).t : -1, ahead = ev.filter(e => !e.now && e.t >= nowT && !/done/.test(e.cls)).slice(0, 2);
+  $("#day-next").innerHTML = ahead.length
+    ? `<span>${isToday ? "Дальше" : "Завтра"}:</span> ${ahead.map(e => `<b>${esc(e.time)}</b> ${esc(e.b)}`).join(" · ")}`
+    : `<span>${isToday ? "На сегодня в ленте больше ничего" : "На завтра в ленте пусто"}</span>`;
+  $("#day").classList.toggle("open", !!S.dayOpen);
+  $("#day-toggle").textContent = S.dayOpen ? "Свернуть" : "Показать весь день";
+  $("#day-toggle").setAttribute("aria-expanded", String(!!S.dayOpen));
   $("#day-tl").innerHTML = ev.filter(e => !e.now).length
     ? ev.map(e => e.now ? `<li class="now"><time>${e.time}</time><span>сейчас</span></li>`
       : `<li class="${e.cls}"><time>${esc(e.time)}</time><div><b>${esc(e.b)}</b>${e.sub ? `<span>${esc(e.sub)}</span>` : ""}</div></li>`).join("")
@@ -1158,12 +1171,6 @@ function renderPlan() {
 
   const hs = active(), tk0 = ymd(todayDate());
   $("#hab-count").textContent = hs.length ? `${hs.filter(h => isDone(tk0, h.id)).length} из ${hs.length}` : "";
-  const tg = togetherInfo(), duo = $("#duo-mini"), todayTg = S.data.together[tk0];
-  duo.innerHTML = todayTg
-    ? `<b>0</b><span>дней — сегодня были вдвоём${todayTg.note ? `: ${esc(todayTg.note)}` : ""}</span>`
-    : tg.days == null
-      ? `<span>Отмечай время вдвоём — здесь будет видно, сколько дней прошло с последнего.</span><button type="button" class="btn" id="duo-btn">Были вдвоём</button>`
-      : `<b>${tg.days}</b><span>${plural(tg.days, "день", "дня", "дней")} с последнего времени вдвоём · норма ${tg.normText}</span><button type="button" class="btn" id="duo-btn">Были вдвоём</button>`;
 
   $("#tasks-title").textContent = isToday ? "Задачи" : "Задачи на завтра";
   const ul = $("#plan-tasks"), foot = $("#plan-foot");
@@ -1216,14 +1223,17 @@ function renderPlan() {
 /* ---------- вкладки ---------- */
 const ICONS = {
   today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>',
-  morning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="14" r="4"/><path d="M12 4v3M5 8l2 2M19 8l-2 2M3 19h18"/></svg>',
-  goals: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
+  plan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4M9 15l2 2 4-4"/></svg>',
+  prayer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2.5 3 4 5 4 7.5a4 4 0 0 1-8 0C8 8 9.5 6 12 3z"/><path d="M6 21h12M9 21v-4.5M15 21v-4.5"/></svg>',
+  sleep: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 4a8.5 8.5 0 1 0 4.8 12.4A7 7 0 0 1 15.5 4z"/></svg>',
   results: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19V11M10 19V6M15 19v-9M20 19v-5"/></svg>',
 };
-const VIEWS = [["today", "Сегодня"], ["morning", "Утро"], ["goals", "Цели"], ["results", "Итоги"]];
-const VIEW_TITLES = { morning: "Утро", goals: "Цели", results: "Итоги", settings: "Настройки" };
+const VIEWS = [["today", "Сегодня"], ["plan", "План"], ["prayer", "Молитва"], ["sleep", "Сон"], ["results", "Итоги"]];
+const VIEW_TITLES = { plan: "План", prayer: "Молитва", sleep: "Сон", results: "Итоги", settings: "Настройки" };
+// старые адреса вкладок из закладок
+const VIEW_ALIASES = { morning: "sleep", goals: "plan" };
 function currentView() {
-  const v = location.hash.slice(1);
+  const h = location.hash.slice(1), v = VIEW_ALIASES[h] || h;
   return v === "settings" || VIEWS.some(x => x[0] === v) ? v : "today";
 }
 function renderNav() {
@@ -1714,7 +1724,6 @@ $("#tg-form").addEventListener("submit", e => {
   $("#tg-note").value = "";
   markTogether(note);
 });
-$("#duo-mini").addEventListener("click", e => { if (e.target.closest("#duo-btn")) markTogether(""); });
 document.querySelectorAll("#day .seg button").forEach(b => b.addEventListener("click", () => { S.dayOff = Number(b.dataset.day); renderPlan(); }));
 $("#work-form").addEventListener("change", () => setSetting({ work: {
   from: $("#wk-from").value, to: $("#wk-to").value,
@@ -1948,7 +1957,7 @@ function taskSphere(x) {
   const tag = S.data?.tags?.[x.id];
   if (tag !== undefined) return tag || null;
   const p = parentOf(x);
-  return (p && taskSphere(p)) || sphereOfText(x.title) || sphereOfText(x.list);
+  return (p && taskSphere(p)) || listSphere(x.list) || sphereOfText(x.title) || sphereOfText(x.list);
 }
 // Что было сделано в каждой сфере по дням: { сфера: { дата: [что] } }
 function sphereActivity(from, to) {
@@ -2056,10 +2065,13 @@ function skewText(rows) {
 }
 function renderBalance() {
   const sp = settings().spheres || [];
-  $("#bal-card").hidden = $("#balance").hidden = !sp.length;
+  $("#bal-batts").hidden = $("#bal-sub").hidden = $("#balance").hidden = !sp.length;
   if (!sp.length) return;
   const tgt = planTarget(), tgtK = ymd(tgt), tk = ymd(todayDate()), isT = tgtK === tk, rows = balance(tgtK), st = settings();
-  $("#bal-title").textContent = isT ? "Упор на сегодня" : "Упор на завтра";
+  const chosen = (S.data.focus[tgtK] || []).length;
+  // До полудня предложения идут в главное на сегодня (прямо в список выше), после — на завтра
+  $("#bal-title").innerHTML = isT ? "Чего не хватает сегодня" : `Упор на завтра<small>выбрано ${chosen} из 3</small>`;
+  $("#bal-sub").hidden = isT && chosen >= 3;
   $("#bal-batts").innerHTML = rows.map(r => { const p = pctOf(r);
     return `<div class="bt ${battCls(p)}" role="img" aria-label="${esc(r.s)}: заряд ${p}%, ${r.touched} из ${r.norm} дней"><span class="bt-n">${esc(r.s)}</span><span class="bt-r">${batt(r)}<b>${p}%</b></span></div>`; }).join("");
   const recs = balanceRecs(tgtK, rows), focus = S.data.focus[tgtK] || [], full = focus.length >= 3;
@@ -2075,7 +2087,7 @@ function renderBalance() {
           ${r.ideas.length > 1 ? `<button type="button" class="alt" data-balt="${esc(r.s)}" aria-label="Другое дело для сферы «${esc(r.s)}» (${j + 1} из ${r.ideas.length})" title="Другое дело">↻</button>` : ""}</div>
           <button type="button" class="pi${x.from === "idea" ? " idea" : ""}${on ? " on" : ""}" data-badd="${i}" aria-pressed="${on}" ${!on && full ? "disabled" : ""} aria-label="${on ? "Убрать из главного" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(fromLine(x))}</small></span><span class="plus">${on ? "✓" : "+"}</span></button></div>`;
       }).join("")
-      + (full ? `<p class="note" style="margin:0">В главном на ${isT ? "сегодня" : "завтра"} уже три дела. Нажми на выбранное, чтобы убрать.</p>` : "")
+      + (full ? `<p class="note" style="margin:0">На завтра уже три дела. Нажми на выбранное, чтобы убрать.</p>` : "")
     : `<p class="bal-ok">Все сферы в своей норме — можно идти по обычному плану.</p>`;
   renderBalanceStats(rows);
 }
@@ -2090,7 +2102,7 @@ function renderBalanceStats(rows) {
       <span class="bs">${r.touched} из</span>
       <select class="field mini" data-norm="${esc(r.s)}" aria-label="Норма для сферы «${esc(r.s)}», дней в неделю">${[1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === r.norm ? "selected" : ""}>${n}</option>`).join("")}</select></li>`).join("");
   $("#bl-care").innerHTML = careChips(tk);
-  renderBalanceTags();
+  renderBalanceLists(); renderBalanceTags();
 }
 const CARE_MARK = "отмечено вручную";
 // Кнопки «уделил время сфере» за день k: что уже видно по привычкам и задачам, отмечено само
@@ -2113,11 +2125,31 @@ function renderBalanceTags() {
   box.hidden = !list.length;
   box.querySelector("summary").innerHTML = `Сферы задач${none ? ` · <span class="warn-t">без сферы: ${none}</span>` : ""}`;
   if (!document.activeElement?.closest?.("#bal-tags ul"))
-    box.querySelector("ul").innerHTML = rows.map(({ x, s, tagged }) => `<li><span>${esc(x.title)}<small>${esc(x.list)}${kidsOf(x).length ? ` · ${kidsOf(x).length} ${plural(kidsOf(x).length, "подзадача", "подзадачи", "подзадач")} — с той же сферой` : ""}${tagged ? "" : s ? " · угадано" : ""}</small></span>
+    box.querySelector("ul").innerHTML = rows.map(({ x, s, tagged }) => `<li><span>${esc(x.title)}<small>${esc(x.list)}${kidsOf(x).length ? ` · ${kidsOf(x).length} ${plural(kidsOf(x).length, "подзадача", "подзадачи", "подзадач")} — с той же сферой` : ""}${tagged ? "" : listSphere(x.list) && s === listSphere(x.list) ? " · по списку" : s ? " · угадано" : ""}</small></span>
     <select class="field mini" data-tag="${esc(x.id)}" aria-label="Сфера задачи «${esc(x.title)}»">${sphereOptions(s)}</select></li>`).join("");
 }
 const DUE_FAIL = "Дату в Google Задачах поменять не удалось. Обнови скрипт google-tasks.gs и сделай новую версию развёртывания — см. «Настройки → Google Задачи».";
 // Нажатие на предложение добавляет его в главное, повторное — убирает
+function renderBalanceLists() {
+  const box = $("#bal-lists");
+  box.hidden = !T.data?.lists?.length;
+  if (box.hidden || document.activeElement?.closest?.("#bal-lists ul")) return;
+  const sp = settings().spheres || [], set = settings().listSpheres || {};
+  const opts = sel => `<option value="" ${sel === "" ? "selected" : ""}>по словам</option>`
+    + sp.map(x => `<option value="${esc(x)}" ${x === sel ? "selected" : ""}>${esc(x)}</option>`).join("")
+    + `<option value="__parked" ${sel === "__parked" ? "selected" : ""}>не предлагать</option>`;
+  const unset = T.data.lists.filter(l => !Object.hasOwn(set, l.title)).length;
+  box.querySelector("summary").innerHTML = `Списки Google и сферы${unset ? ` · <span class="faint">не настроено: ${unset}</span>` : ""}`;
+  box.querySelector("ul").innerHTML = T.data.lists.map(l => {
+    const n = T.data.tasks.filter(x => x.listId === l.id && x.status !== "completed").length;
+    return `<li><span>${esc(l.title)}<small>${n} ${plural(n, "открытая задача", "открытые задачи", "открытых задач")}</small></span>
+      <select class="field mini" data-list="${esc(l.title)}" aria-label="Сфера списка «${esc(l.title)}»">${opts(listMode(l.title))}</select></li>`;
+  }).join("");
+}
+$("#bal-lists").addEventListener("change", e => {
+  const el = e.target.closest("[data-list]");
+  if (el && canWrite()) { setSetting({ listSpheres: { ...(settings().listSpheres || {}), [el.dataset.list]: el.value } }); el.blur(); }
+});
 function addBalanceIdea(i) {
   const x = S.balIdeas?.[i], tgtK = ymd(planTarget()), day = tgtK === ymd(todayDate()) ? "сегодня" : "завтра";
   if (!x || !canWrite()) return;
@@ -2556,20 +2588,28 @@ function savePrayer() {
     op(...back);
   });
 }
+function renderNow() {
+  if (!S.data) return;
+  const hr = new Date().getHours(), m = nowMin(), r = prRun(), x = currentSlot(), s = x && sess(x.key), rit = ritualDue();
+  const prayOn = !!r || (hr >= 3 && hr < 12), prayMet = prayOn && !r && prayMinutes(ymd(todayDate())) >= prTarget();
+  const live = x && ((m >= x.a && m < x.z) || s?.status === "started");
+  const pick = r ? "pray" : live ? "slot" : rit ? "ritual" : prayOn && !prayMet ? "pray"
+    : x && s?.status !== "done" ? "slot" : prayOn ? "pray" : x ? "slot" : null;
+  $("#pray-card").hidden = pick !== "pray"; $("#ritual-card").hidden = pick !== "ritual"; $("#slot-card").hidden = pick !== "slot";
+}
 function renderPrayCard() {
-  const card = $("#pray-card");
-  if (!card || !S.data) return;
-  const r = prRun(), hr = new Date().getHours(), tk = ymd(todayDate());
-  card.hidden = !r && !(hr >= 3 && hr < 12);
-  if (card.hidden) return;
+  if (!S.data) return;
+  const r = prRun(), tk = ymd(todayDate());
   const done = prayMinutes(tk), tgt = prTarget(), met = !r && done >= tgt;
-  // Цель на сегодня закрыта — карточка сворачивается в тихую строку, повторный запуск остаётся
-  card.classList.toggle("met", met);
-  card.innerHTML = met
+  // Цель на сегодня закрыта — карточка сворачивается в тихую строку, повторный запуск остаётся.
+  // Та же карточка — на вкладке «Молитва» (всегда) и на «Сегодня» (утром или пока идёт таймер)
+  const html = met
     ? `<span class="pc-ok">${CHECK}</span><div class="pc-t"><b>Молитва — цель на сегодня достигнута</b><span>сегодня ${fmtDur(done)} · цель ${tgt} мин</span></div><button type="button" class="btn sm ghost" data-pray="start">Ещё раз</button>`
     : r
     ? `<div class="pc-t"><b>${r.paused ? "Молитва на паузе" : "Молитва идёт"}</b><span class="pc-live">${mmss(prElapsed(r))}</span></div><button type="button" class="btn" data-pray="open">Открыть</button>`
     : `<div class="pc-t"><b>Молитва</b><span>${done ? `сегодня ${fmtDur(done)} · цель ${tgt} мин` : `цель ${tgt} мин · экран не погаснет`}</span></div><button type="button" class="btn" data-pray="start">Начать</button>`;
+  for (const card of [$("#pray-card"), $("#pray-tab-card")]) { card.classList.toggle("met", met); card.innerHTML = html; }
+  renderNow();
 }
 function renderPrayStats() {
   const t = todayDate(), tgt = prTarget(), days = [];
@@ -2578,7 +2618,7 @@ function renderPrayStats() {
     days.push({ label: String(d.getDate()), value: m, current: i === 0, tip: `${fmtShort.format(d)} · ${m ? fmtDur(m) : "не было"}` });
   }
   const max = Math.ceil(Math.max(tgt * 1.4, ...days.map(x => x.value)) / 10) * 10;
-  barChart($("#ps-chart"), days, { max, fmt: v => `${Math.round(v)} мин`, line: tgt, empty: "Пока нет записанных молитв. Запусти таймер утром на главной." });
+  barChart($("#ps-chart"), days, { max, fmt: v => `${Math.round(v)} мин`, line: tgt, empty: "Пока нет записанных молитв. Запусти таймер здесь или утром на «Сегодня»." });
   let week = 0, sum14 = 0, streak = 0, span = 0;
   for (let i = 0; i < 7; i++) week += prayMinutes(ymd(addDays(t, -i)));
   // Среднее — по дням с первой записи, но не больше 14, чтобы первые дни не занижали цифру
@@ -2769,7 +2809,7 @@ setInterval(() => {
   // Раз в минуту: смена дня и полдень (после 12:00 прогноз переключается на завтра)
   const now = new Date(), key = ymd(todayDate()) + (now.getHours() < 12 ? "am" : "pm");
   if (key !== lastKey) { lastKey = key; S.memo = null; render(); }
-  else if (S.data) { renderKid(); renderPlan(); renderSlotCard(); renderRitualCard(); }
+  else if (S.data) { renderKid(); renderPlan(); renderSlotCard(); renderRitualCard(); renderNow(); }
 }, 60000);
 let lastW = innerWidth;
 addEventListener("resize", () => {

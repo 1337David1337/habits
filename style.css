@@ -98,7 +98,7 @@ section { min-width:0; }
 .foot-note { margin:10px 0 0; font-size:12.5px; color:var(--faint); }
 
 /* ---------- вкладки ---------- */
-.tabbar { position:fixed; left:0; right:0; bottom:0; z-index:15; display:grid; grid-template-columns:repeat(4,1fr);
+.tabbar { position:fixed; left:0; right:0; bottom:0; z-index:15; display:grid; grid-template-columns:repeat(5,1fr);
   padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px)); background:color-mix(in srgb, var(--card) 88%, transparent);
   backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-top:1px solid var(--line); }
 .tabbar a, .side-nav a { display:flex; flex-direction:column; align-items:center; gap:2px; padding:5px 0; font-size:11.5px; font-weight:500;
@@ -426,7 +426,7 @@ ul.mlist .arch-name { flex:1 1 200px; color:var(--faint); }
   padding:5px 9px; border-radius:8px; white-space:nowrap; }
 .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(78px + env(safe-area-inset-bottom,0px)); z-index:20;
   background:var(--tip-bg); color:var(--tip-ink); border-radius:14px; padding:11px 15px; font-size:14.5px;
-  display:flex; gap:14px; align-items:center; max-width:calc(100vw - 32px); box-shadow:0 8px 24px rgba(0,0,0,.2); }
+  display:flex; gap:14px; align-items:center; width:max-content; max-width:calc(100vw - 32px); box-shadow:0 8px 24px rgba(0,0,0,.2); }
 .toast button { background:none; border:0; color:inherit; font-weight:600; text-decoration:underline; text-underline-offset:3px; padding:0; white-space:nowrap; }
 
 /* ---------- узкие экраны ---------- */
@@ -674,7 +674,7 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .bal-list .bs { font-size:13px; color:var(--faint); white-space:nowrap; text-align:right; }
 .bal-list .field.mini { margin-left:-4px; }
 .bal-skew.ok { background:var(--teal-bg); color:var(--teal); }
-.bal-rec .br-h .alt { flex:none; width:28px; height:28px; border-radius:50%; border:0; background:var(--field); color:var(--soft); font-size:15px; line-height:1; padding:0; }
+.bal-rec .br-h .alt { flex:none; width:36px; height:36px; border-radius:50%; border:0; background:var(--field); color:var(--soft); font-size:15px; line-height:1; padding:0; }
 .bal-rec .br-h span { flex:1; }
 .care { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; margin-top:6px; }
 .cchip { display:grid; grid-template-columns:22px minmax(0,1fr); gap:8px; align-items:start; text-align:left; border:0; border-radius:12px; padding:9px 10px; background:var(--field); }
@@ -736,3 +736,29 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .pick button.pi.on .plus { background:var(--teal); color:var(--on-accent); }
 .pick button.pi[aria-pressed="true"] { background:var(--teal-bg); border-color:transparent; }
 .pick button.pi[aria-pressed="true"] .plus { background:var(--teal); color:var(--on-accent); }
+
+/* ---------- исправления: пустые состояния, контраст ---------- */
+.focus li.empty { display:block; }
+.hab:not([aria-pressed="true"]) .tick, .pt:not(.done) button, .focus li:not(.done) button.fk, .cell:not([aria-pressed="true"]):not(:disabled) {
+  box-shadow:inset 0 0 0 1.5px var(--line2); }
+.week td.name small.ok-t { color:var(--teal); } .week td.name small.warn-t { color:var(--warn); }
+.week td.name { min-width:96px; }
+@media (max-width:420px) { .cell { width:28px; height:28px; border-radius:8px; } .week th, .week td { padding:5px 1px; } }
+
+/* ---------- «Главное» с упором и заряд сфер ---------- */
+#focus-card .batts { margin:0 0 12px; padding:10px 12px; border-radius:14px; background:var(--field); text-decoration:none; color:inherit; gap:8px 12px; }
+#focus-card .batts:hover { box-shadow:inset 0 0 0 1.5px var(--line2); }
+.bal-sub { margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+.bal-h { margin:0 0 10px; font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.bal-h small { font-size:12.5px; font-weight:500; color:var(--faint); }
+.bal-sub .bal-rec { gap:10px; }
+
+/* ---------- лента дня: свёрнута до «дальше…» ---------- */
+.tl-next { margin:0; font-size:14.5px; color:var(--ink); line-height:1.45; }
+.tl-next span { color:var(--faint); }
+.tl-next b { font-weight:600; }
+#day .tl { display:none; }
+#day.open .tl { display:block; }
+#day.open .tl-next { display:none; }
+.tl-more { margin-top:10px; font-size:13.5px; }
+.faint { color:var(--faint); font-weight:400; }

@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=25">
+<link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -83,18 +83,17 @@
             <button type="button" role="tab" data-day="1">Завтра</button>
           </div>
         </div>
+        <p class="tl-next" id="day-next"></p>
         <ol class="tl" id="day-tl"></ol>
+        <button type="button" class="linkbtn tl-more" id="day-toggle" aria-controls="day-tl">Показать весь день</button>
       </section>
 
       <div class="stack">
-        <section class="card" id="focus-card">
+        <section class="card bal" id="focus-card">
           <div class="card-h"><h2>Главное на сегодня</h2><small id="focus-count"></small></div>
+          <a class="batts" id="bal-batts" href="#plan" aria-label="Заряд сфер — открыть баланс в «Плане»" hidden></a>
           <ul class="focus" id="focus-list"></ul>
-        </section>
-        <section class="card bal" id="bal-card" hidden>
-          <div class="card-h"><h2 id="bal-title">Упор на завтра</h2><a class="aside" href="#results" id="bal-more">баланс сфер →</a></div>
-          <div class="batts" id="bal-batts"></div>
-          <div class="bal-rec" id="bal-rec"></div>
+          <div class="bal-sub" id="bal-sub" hidden><p class="bal-h" id="bal-title">Упор на завтра</p><div class="bal-rec" id="bal-rec"></div></div>
         </section>
         <section class="card">
           <div class="card-h"><h2>Привычки</h2><small id="hab-count"></small></div>
@@ -105,12 +104,11 @@
           <ul class="ptasks" id="plan-tasks"></ul>
           <p class="pt-foot" id="plan-foot"></p>
         </section>
-        <section class="card duo" id="duo-mini"></section>
       </div>
     </div>
 
-    <!-- ================= УТРО ================= -->
-    <div class="view" data-view="morning" hidden>
+    <!-- ================= СОН ================= -->
+    <div class="view" data-view="sleep" hidden>
       <section class="span2">
         <div class="forecast">
           <div class="fc-box kid">
@@ -162,8 +160,32 @@
       </section>
     </div>
 
-    <!-- ================= ЦЕЛИ ================= -->
-    <div class="view" data-view="goals" hidden>
+    <!-- ================= ПЛАН ================= -->
+    <div class="view" data-view="plan" hidden>
+      <section class="card span2" id="system">
+        <div class="card-h"><h2>Обзор недели и система</h2><small id="sys-aside"></small></div>
+        <div class="tiles" id="sys-tiles"></div>
+        <div class="sys-grid">
+          <div>
+            <h3 class="h3">Гигиена задач</h3>
+            <ul class="plain checks" id="sys-checks"></ul>
+          </div>
+          <div>
+            <h3 class="h3">Обзор недели</h3>
+            <div class="wstrip" id="rv-weeks"></div>
+            <p class="rv-text" id="rv-text"></p>
+            <div class="row-btns">
+              <button type="button" class="btn" id="rv-start">Провести обзор недели</button>
+              <button type="button" class="btn ghost" id="rv-btn">Отметить без шагов</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="card span2" id="slot-plan">
+        <div class="card-h"><h2>Слоты на неделю</h2><small id="slot-plan-aside"></small></div>
+        <p class="note" style="margin-top:0">Впиши в каждый свободный слот один шаг — выбери из следующих шагов целей или напиши свой.</p>
+        <ul class="splan" id="slot-plan-list"></ul>
+      </section>
       <section class="span2" id="goals">
         <div class="sec-head"><h2>Стратегические цели</h2><span class="aside" id="goals-aside"></span></div>
         <div class="glist" id="goal-list"></div>
@@ -183,7 +205,54 @@
           </form>
         </details>
       </section>
+      <section class="card span2 bal" id="balance" hidden>
+        <div class="card-h"><h2>Баланс сфер</h2><small>последние 7 дней</small></div>
+        <p class="bal-skew" id="bl-skew" hidden></p>
+        <ul class="bal-list" id="bl-list"></ul>
+        <p class="note">Заряд — дни, когда сфера получала время за последние 7 дней, от нормы: 2 из 5 = 40%. Больше 100% — сфере достаётся больше нормы. Норму можно поменять: от неё зависит, какие сферы попадут в «Упор на завтра».</p>
+        <p class="pick-h">Сегодня уделил время</p>
+        <div id="bl-care"></div>
+        <p class="note">Само отмечается по привычкам, сделанным задачам и главному, шагам в слотах, времени вдвоём, молитве и вечерам в церкви. Остальное отметь здесь или в «Вечерних 5 минутах».</p>
+        <details class="bal-tags" id="bal-lists" hidden><summary>Списки Google и сферы</summary>
+          <p class="note">Задачи списка получают его сферу. «По словам» — сфера угадывается по названию задачи, «не предлагать» — для парковки вроде «Когда-нибудь»: такие задачи не попадут в рекомендации, пока не перенесёшь их в другой список.</p><ul></ul></details>
+        <details class="bal-tags" id="bal-tags" hidden><summary>Сферы задач</summary><ul></ul></details>
+      </section>
+      <section class="card span2" id="together">
+        <div class="card-h"><h2>Время вдвоём</h2>
+          <label class="aside" for="tg-norm">норма <select class="field mini" id="tg-norm"></select></label></div>
+        <div class="tg">
+          <div class="tg-big" id="tg-big"></div>
+          <div>
+            <div class="wstrip" id="tg-weeks"></div>
+            <p class="note" id="tg-weeks-cap"></p>
+          </div>
+        </div>
+        <form class="row" id="tg-form">
+          <label class="sr" for="tg-note">Что делали</label>
+          <input class="field" type="text" id="tg-note" maxlength="80" placeholder="Что делали — необязательно" autocomplete="off">
+          <button class="btn pink" type="submit" id="tg-btn">Сегодня были вдвоём</button>
+        </form>
+        <ul class="tg-list" id="tg-list"></ul>
+      </section>
+    </div>
 
+    <!-- ================= МОЛИТВА ================= -->
+    <div class="view" data-view="prayer" hidden>
+      <section class="card span2 pray-card" id="pray-tab-card"></section>
+      <section class="card span2" id="pray-stats">
+        <div class="card-h"><h2>Статистика</h2><small id="ps-aside"></small></div>
+        <div class="tiles" id="ps-tiles"></div>
+        <div class="charts2">
+          <figure>
+            <figcaption>Минуты молитвы по дням<small>Последние 14 дней. Линия — твоя цель на день.</small></figcaption>
+            <div class="chart" id="ps-chart"></div>
+          </figure>
+          <figure>
+            <figcaption>Успел до подъёма Марка<small id="ps-when-cap">Закончилась ли молитва до того, как Марк проснулся.</small></figcaption>
+            <ul class="plain checks" id="ps-when"></ul>
+          </figure>
+        </div>
+      </section>
       <section class="card span2" id="needs">
         <div class="card-h"><h2>Молитвенные нужды</h2><small id="needs-aside"></small></div>
         <form class="row" id="need-form">
@@ -214,35 +283,11 @@
           </div>
         </div>
       </section>
-
-      <section class="card span2" id="slot-plan">
-        <div class="card-h"><h2>Слоты на неделю</h2><small id="slot-plan-aside"></small></div>
-        <p class="note" style="margin-top:0">Впиши в каждый свободный слот один шаг — выбери из следующих шагов целей или напиши свой.</p>
-        <ul class="splan" id="slot-plan-list"></ul>
-      </section>
-
-      <section class="card span2" id="together">
-        <div class="card-h"><h2>Время вдвоём</h2>
-          <label class="aside" for="tg-norm">норма <select class="field mini" id="tg-norm"></select></label></div>
-        <div class="tg">
-          <div class="tg-big" id="tg-big"></div>
-          <div>
-            <div class="wstrip" id="tg-weeks"></div>
-            <p class="note" id="tg-weeks-cap"></p>
-          </div>
-        </div>
-        <form class="row" id="tg-form">
-          <label class="sr" for="tg-note">Что делали</label>
-          <input class="field" type="text" id="tg-note" maxlength="80" placeholder="Что делали — необязательно" autocomplete="off">
-          <button class="btn pink" type="submit" id="tg-btn">Сегодня были вдвоём</button>
-        </form>
-        <ul class="tg-list" id="tg-list"></ul>
-      </section>
     </div>
 
     <!-- ================= ИТОГИ ================= -->
     <div class="view" data-view="results" hidden>
-      <section class="card span2">
+      <section class="card span2" id="week">
         <div class="card-h">
           <h2>Неделя</h2>
           <div class="nav">
@@ -255,18 +300,6 @@
         <div class="scroll"><table class="week" id="week-table"></table></div>
         <p class="note">Прошлые дни можно отметить задним числом. Норма считается на неделю, а не на каждый день.</p>
       </section>
-
-      <section class="card span2 bal" id="balance" hidden>
-        <div class="card-h"><h2>Баланс сфер</h2><small>последние 7 дней</small></div>
-        <p class="bal-skew" id="bl-skew" hidden></p>
-        <ul class="bal-list" id="bl-list"></ul>
-        <p class="note">Заряд — дни, когда сфера получала время за последние 7 дней, от нормы: 2 из 5 = 40%. Больше 100% — сфере достаётся больше нормы. Норму можно поменять: от неё зависит, какие сферы попадут в «Упор на завтра».</p>
-        <p class="pick-h">Сегодня уделил время</p>
-        <div id="bl-care"></div>
-        <p class="note">Само отмечается по привычкам, сделанным задачам и главному, шагам в слотах, времени вдвоём, молитве и вечерам в церкви. Остальное отметь здесь или в «Вечерних 5 минутах».</p>
-        <details class="bal-tags" id="bal-tags" hidden><summary>Сферы задач</summary><ul></ul></details>
-      </section>
-
       <section class="card span2" id="progress">
         <div class="card-h">
           <h2>Прогресс</h2>
@@ -305,22 +338,6 @@
           </figure>
         </div>
       </section>
-
-      <section class="card span2" id="pray-stats">
-        <div class="card-h"><h2>Молитва</h2><small id="ps-aside"></small></div>
-        <div class="tiles" id="ps-tiles"></div>
-        <div class="charts2">
-          <figure>
-            <figcaption>Минуты молитвы по дням<small>Последние 14 дней. Линия — твоя цель на день.</small></figcaption>
-            <div class="chart" id="ps-chart"></div>
-          </figure>
-          <figure>
-            <figcaption>Успел до подъёма Марка<small id="ps-when-cap">Закончилась ли молитва до того, как Марк проснулся.</small></figcaption>
-            <ul class="plain checks" id="ps-when"></ul>
-          </figure>
-        </div>
-      </section>
-
       <section class="card span2" id="focus-time">
         <div class="card-h"><h2>Время на цели</h2><small id="ft-aside"></small></div>
         <div class="tiles" id="ft-tiles"></div>
@@ -333,26 +350,6 @@
             <figcaption>По целям за месяц<small id="ft-goals-cap">Время, потраченное в слотах.</small></figcaption>
             <ul class="hbars" id="ft-goals"></ul>
           </figure>
-        </div>
-      </section>
-
-      <section class="card span2" id="system">
-        <div class="card-h"><h2>Система</h2><small id="sys-aside"></small></div>
-        <div class="tiles" id="sys-tiles"></div>
-        <div class="sys-grid">
-          <div>
-            <h3 class="h3">Гигиена задач</h3>
-            <ul class="plain checks" id="sys-checks"></ul>
-          </div>
-          <div>
-            <h3 class="h3">Обзор недели</h3>
-            <div class="wstrip" id="rv-weeks"></div>
-            <p class="rv-text" id="rv-text"></p>
-            <div class="row-btns">
-              <button type="button" class="btn" id="rv-start">Провести обзор недели</button>
-              <button type="button" class="btn ghost" id="rv-btn">Отметить без шагов</button>
-            </div>
-          </div>
         </div>
       </section>
     </div>
@@ -555,6 +552,6 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>
