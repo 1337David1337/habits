@@ -189,6 +189,16 @@ test("баланс: сфера «по делу» без дел не подсве
   await expect(page.locator("#bl-list .bg-n.od", { hasText: "здоровье" })).toHaveCount(1);
 });
 
+test("сферы задач: мама — к родным, а не к работе; kia — к дому", async ({ page }) => {
+  const data = fixture();
+  data.settings.spheres = ["рост", "жена", "ребёнок", "церковь", "деньги", "здоровье", "дом", "родные"];
+  await open(page, { hash: "plan", data });
+  await page.locator("#bal-tags summary").click();
+  await expect(page.locator('#bal-tags select[data-tag="m1"]')).toHaveValue("родные");
+  await expect(page.locator('#bal-tags select[data-tag="k1"]')).toHaveValue("дом");
+  await expect(page.locator('#bal-tags select[data-tag="t1"]')).toHaveValue("рост");
+});
+
 test("баланс: клетка недели объясняет, что засчиталось, а лодка в «Итогах» видна", async ({ page }) => {
   await open(page, { hash: "plan" });
   const cell = page.locator("#bl-list .bg-c.on").first();

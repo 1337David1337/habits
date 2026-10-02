@@ -42,6 +42,8 @@ const TASKS = { lists: LISTS, tasks: [
   task("c5", FAMILY, "Выбрать кроватку", { parent: "p2", position: "2" }),
   task("t7", NEXT, "Подарить жене цветы"),
   task("s1", SOMEDAY, "Свозить жену на море"),
+  task("m1", NEXT, "Поискать маме работу", { status: "completed", completed: `${day(-1)}T10:00:00Z` }),
+  task("k1", NEXT, "Заменить клапаны воздуха на kia"),
 ] };
 
 async function open(page, { time = "10:00", hash = "today", data = fixture() } = {}) {
