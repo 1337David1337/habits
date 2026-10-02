@@ -818,7 +818,7 @@ ul.needs { list-style:none; margin:10px 0 0; padding:0; }
 .bal-more { justify-self:start; font-size:13.5px; }
 
 /* «План»: неделя клетками */
-.bgrid { display:grid; grid-template-columns:minmax(0,76px) repeat(7,minmax(0,1fr)) minmax(70px,auto); gap:6px 4px; align-items:center; }
+.bgrid { max-width:520px; display:grid; grid-template-columns:minmax(0,76px) repeat(7,minmax(0,1fr)) minmax(70px,auto); gap:6px 4px; align-items:center; }
 .bg-d { font-size:11px; color:var(--faint); text-align:center; }
 .bg-d.t { color:var(--ink); font-weight:700; }
 .bg-n { font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -833,7 +833,7 @@ ul.needs { list-style:none; margin:10px 0 0; padding:0; }
 .bg-s small { display:block; font-size:12px; color:var(--faint); }
 .bg-s.need small { color:var(--amber); font-weight:600; }
 .bg-s.ok small { color:var(--teal); font-weight:600; }
-.bg-detail { margin:12px 0 6px; padding:10px 12px; border-radius:12px; background:var(--field); color:var(--soft); font-size:14px; line-height:1.4; }
+.bg-detail { max-width:520px; margin:12px 0 6px; padding:10px 12px; border-radius:12px; background:var(--field); color:var(--soft); font-size:14px; line-height:1.4; }
 .bg-detail b { color:var(--ink); }
 #bal-norms li span::first-letter { text-transform:uppercase; }
 

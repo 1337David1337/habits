@@ -2332,7 +2332,7 @@ function renderBalanceStats(rows) {
     + rows.map((r, i) => {
       const st = weekState(r);
       return `<span class="bg-n${r.onDemand ? " od" : ""}">${esc(r.s)}</span>`
-        + r.week.map((d, j) => `<button type="button" class="bg-c${d.what ? " on" : ""}" data-bg="${i}:${j}" style="--i:${i + j}" aria-label="${esc(r.s)}, ${dayLabel(d.k)}: ${d.what ? esc([...new Set(d.what)].join(", ")) : "не было"}"></button>`).join("")
+        + r.week.map((d, j) => `<button type="button" class="bg-c${d.what ? " on" : ""}" data-bg="${i}:${j}" style="--i:${i + j}" data-tip="${esc(`${capF(dayLabel(d.k))} · ${d.what ? [...new Set(d.what)].join(", ") : "не было"}`)}" aria-label="${esc(r.s)}, ${dayLabel(d.k)}: ${d.what ? esc([...new Set(d.what)].join(", ")) : "не было"}"></button>`).join("")
         + `<span class="bg-s ${st.cls}">${r.onDemand ? "" : `<b>${r.touched}</b> из ${r.norm}`}<small>${st.t}</small></span>`;
     }).join(""));
   $("#bl-care").innerHTML = careChips(tk);
