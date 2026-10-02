@@ -794,7 +794,7 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .duo-card .pc-t > span:last-child { display:block; margin-top:2px; }
 .duo-card .btn.ghost { background:var(--card); color:var(--violet); }
 .duo-card.met .btn { background:transparent; color:var(--teal); }
-.tl .duo::before { background:var(--violet); }
+.tl .tl-duo::before { background:var(--violet); }
 /* сон: промежуточные пробуждения и «ты уже встал» */
 .fc-box p.fc-next { margin-top:8px; font-size:13px; color:var(--faint); }
 .fc-next:empty { display:none; }

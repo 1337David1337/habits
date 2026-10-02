@@ -1303,7 +1303,7 @@ function renderPlan() {
   const eh = evHabit(), ub = usualBed();
   if (eh && !isDone(k, eh.id) && (bedDay != null || ub)) {
     const L = lightSleep(), base = bedDay ?? ub.at;
-    add(base + L.d, `≈ ${hm(base + L.d)}`, "duo", "Молитва и чтение вдвоём", bedDay != null ? `через ${L.d} мин после того, как ${name} уснул` : `если ${name} уснёт ≈ ${hm(base)}`);
+    add(base + L.d, `≈ ${hm(base + L.d)}`, "tl-duo", "Молитва и чтение вдвоём", bedDay != null ? `через ${L.d} мин после того, как ${name} уснул` : `если ${name} уснёт ≈ ${hm(base)}`);
   }
   slotsOn(d).forEach(x => {
     const ss = sess(sKey(k, x.from)), stx = { done: " · сделано", started: " · идёт", skipped: " · пропущен", moved: " · перенесён" }[ss?.status] || "";
