@@ -3032,7 +3032,19 @@ addEventListener("resize", () => {
   clearTimeout(S.rz);
   S.rz = setTimeout(() => { if (Math.abs(innerWidth - lastW) > 20 && S.data) { lastW = innerWidth; renderKid(); renderGoals(); renderProgress(); } }, 200);
 });
+// GitHub Pages отдаёт index.html с кэшем на 10 минут, а ярлык на iPhone держит страницу ещё дольше.
+// При открытии сверяем версию app.js с сервером: если вышла новая — обновляем кэш и перезагружаемся.
+const MY_V = (document.querySelector('script[src*="app.js"]')?.getAttribute("src").match(/v=(\d+)/) || [])[1];
+async function checkUpdate() {
+  if (!MY_V || location.protocol === "file:") return;
+  try {
+    const html = await (await fetch("./", { cache: "reload" })).text(), v = (html.match(/app\.js\?v=(\d+)/) || [])[1];
+    if (v && v !== MY_V && !prRun() && !sessionStorage.getItem("keel.upd" + v)) { sessionStorage.setItem("keel.upd" + v, "1"); location.reload(); }
+  } catch {}
+}
+setTimeout(checkUpdate, 3000);
 document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") checkUpdate();
   if (document.visibilityState === "visible" && S.cfg) { S.pending.length ? flush() : refresh(); T.loadedAt = 0; }
 });
 addEventListener("online", () => { if (S.cfg) S.pending.length ? flush() : refresh(); });
