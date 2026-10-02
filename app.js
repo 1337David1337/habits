@@ -692,7 +692,7 @@ function render() {
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
   renderRitualCard(); renderSlotCard(); renderFocus(); renderBalance(); renderSlotPlan(); renderFocusTime();
-  renderPrayCard(); renderDuoCard(); renderPrayStats(); renderPraySettings(); renderNeeds(); renderRemind();
+  renderPrayCard(); renderDuoCard(); renderVerse(); renderPrayStats(); renderPraySettings(); renderNeeds(); renderRemind();
 }
 function renderHeader() {
   const t = todayDate(), tk = ymd(t), v = currentView();
@@ -2825,6 +2825,52 @@ function renderNow() {
     : x && s?.status !== "done" ? "slot" : prayOn ? "pray" : x ? "slot" : null;
   $("#pray-card").hidden = pick !== "pray"; $("#ritual-card").hidden = pick !== "ritual"; $("#slot-card").hidden = pick !== "slot";
 }
+/* ---------- стих дня ---------- */
+// Каждый день — следующий стих из verses.js; дело дня отмечается в rituals.verse и засчитывается в сферу
+const VERSE_CANON = { "жена": "жена", "ребенок": "ребенок", "работа": "работа", "церковь": "церковь", "деньги": "деньги", "здоровье": "здоровье", "дом": "дом" };
+function verseOf(k) {
+  const list = window.VERSES || [];
+  if (!list.length) return null;
+  const n = Math.round((parse(k) - new Date(2026, 0, 1)) / 864e5);
+  return list[((n % list.length) + list.length) % list.length];
+}
+const verseSphere = v => VERSE_CANON[v.s] ? sphereByCanon(VERSE_CANON[v.s]) || (v.s === "жена" || v.s === "ребенок" ? sphereByCanon("семья") : null) : null;
+function renderVerse() {
+  const card = $("#verse-card"), tk = ymd(todayDate()), v = S.data && verseOf(tk);
+  card.hidden = !v;
+  if (!v) return;
+  const done = !!S.data.rituals.verse?.[tk], key = `${tk}|${done}|${kidName()}`;
+  if (card.dataset.key === key) return; // не перерисовываем — иначе анимация начнётся заново
+  card.dataset.key = key;
+  let seen = null;
+  try { seen = localStorage.getItem("keel.verseSeen"); } catch {}
+  const rise = seen !== tk && !card.dataset.shown;
+  const words = v.t.split(" ");
+  const act = v.a.replace(/\{kidGen\}/g, kidGen()).replace(/\{kid\}/g, kidName());
+  card.classList.toggle("rise", rise);
+  card.style.setProperty("--after", `${words.length * 70 + 450}ms`);
+  card.innerHTML = `<span class="v-eye"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v3M4.9 6.9l2.1 2.1M19.1 6.9 17 9M2 16h20M6 16a6 6 0 0 1 12 0"/></svg>Стих дня</span>
+    <blockquote>${words.map((w, i) => `<span class="w" style="--i:${i}">${esc(w)}</span>`).join(" ")}</blockquote>
+    <cite>${esc(v.r)}</cite>
+    <div class="v-act${done ? " done" : ""}">${done
+      ? `<p><span class="v-ok">${CHECK}</span>Сделано: ${esc(act)}</p>`
+      : `<p><span>Сегодня:</span> ${esc(act)}</p><button type="button" class="btn sm" data-verse="done">Сделал</button>`}</div>`;
+  card.dataset.shown = "1";
+  if (rise) try { localStorage.setItem("keel.verseSeen", tk); } catch {}
+}
+$("#verse-card").addEventListener("click", e => {
+  if (!e.target.closest('[data-verse="done"]')) return;
+  if (!canWrite()) { openConnect(); return; }
+  const tk = ymd(todayDate()), v = verseOf(tk), sp = v && verseSphere(v), had = sp && (S.data.care[tk] || []).includes(sp);
+  const ops = [{ t: "ritual", kind: "verse", date: tk, time: nowHM() }];
+  if (sp && !had) ops.push({ t: "care", date: tk, sphere: sp, val: true });
+  op(...ops);
+  toast(sp ? `Дело дня сделано · засчитано в «${sp}»` : "Дело дня сделано", () => {
+    const back = [{ t: "ritual", kind: "verse", date: tk, time: null }];
+    if (sp && !had) back.push({ t: "care", date: tk, sphere: sp, val: false });
+    op(...back);
+  });
+});
 function renderPrayCard() {
   if (!S.data) return;
   const r = prRun(), tk = ymd(todayDate());

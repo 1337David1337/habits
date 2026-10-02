@@ -20,8 +20,8 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=37">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=PT+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -46,6 +46,7 @@
   <main id="main" hidden>
     <!-- ================= СЕГОДНЯ ================= -->
     <div class="view" data-view="today">
+      <section class="card span2 verse" id="verse-card" aria-label="Стих дня" hidden></section>
       <section class="span2">
         <div class="kid-actions">
           <button type="button" class="kbtn kid" id="kid-wake">
@@ -574,6 +575,7 @@
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
 <script src="demo-data.js?v=1"></script>
-<script src="app.js?v=42"></script>
+<script src="verses.js?v=1"></script>
+<script src="app.js?v=43"></script>
 </body>
 </html>

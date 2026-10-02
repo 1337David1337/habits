@@ -10,6 +10,7 @@
   --wake:#D06A12;
   --shadow:0 1px 2px rgba(16,24,40,.04), 0 6px 20px rgba(16,24,40,.05);
   --tip-bg:#141A21; --tip-ink:#F4F6F8;
+  --dawn-a:#FFF4E6; --dawn-b:#FBE7D3; --dawn-ink:#5A2E0E; --dawn-ref:#9A4A12; --dawn-glow:rgba(240,161,90,.45);
   /* имена, которые использует app.js */
   --pine:var(--teal); --pine-ink:var(--on-accent); --gold:var(--warn); --ink-soft:var(--soft);
   --surface:var(--card); --paper:var(--bg);
@@ -27,6 +28,7 @@
   --wake:#F0A15A;
   --shadow:0 1px 2px rgba(0,0,0,.3);
   --tip-bg:#E8ECF1; --tip-ink:#0F1216;
+  --dawn-a:#2A1F17; --dawn-b:#1E1A1D; --dawn-ink:#F6E3CF; --dawn-ref:#F0A15A; --dawn-glow:rgba(240,161,90,.35);
   color-scheme:dark;
 } }
 :root[data-theme="dark"] {
@@ -40,6 +42,7 @@
   --wake:#F0A15A;
   --shadow:0 1px 2px rgba(0,0,0,.3);
   --tip-bg:#E8ECF1; --tip-ink:#0F1216;
+  --dawn-a:#2A1F17; --dawn-b:#1E1A1D; --dawn-ink:#F6E3CF; --dawn-ref:#F0A15A; --dawn-glow:rgba(240,161,90,.35);
   color-scheme:dark;
 }
 
@@ -804,3 +807,31 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .fc-box.me.done .fc-big { color:var(--soft); opacity:.75; }
 /* сфера «по делу»: без заряда и без красного */
 .bal-list li.od .od-t { grid-column:2 / 5; font-size:13px; color:var(--faint); }
+
+/* ---------- стих дня ---------- */
+.verse { position:relative; overflow:hidden; background:linear-gradient(135deg,var(--dawn-a),var(--dawn-b)); box-shadow:none; padding:18px 20px 16px; }
+.verse .v-eye { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--dawn-ref); }
+.verse .v-eye svg { width:15px; height:15px; }
+.verse blockquote { margin:10px 0 6px; font-family:"PT Serif",Georgia,serif; font-size:clamp(19px,2.6vw,23px); line-height:1.45; color:var(--dawn-ink); text-wrap:pretty; }
+.verse cite { display:block; text-align:right; font-style:normal; font-size:13.5px; font-weight:600; color:var(--dawn-ref); }
+.verse .v-act { display:flex; align-items:center; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid color-mix(in srgb,var(--dawn-ref) 22%,transparent); }
+.verse .v-act p { flex:1; margin:0; font-size:14.5px; line-height:1.4; color:var(--ink); }
+.verse .v-act p span { color:var(--dawn-ref); font-weight:600; }
+.verse .v-act .btn { background:var(--dawn-ref); color:var(--on-accent); white-space:nowrap; }
+.verse .v-act.done p { color:var(--soft); }
+.verse .v-ok { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%; background:var(--teal); vertical-align:-5px; margin-right:6px; }
+.verse .v-ok svg { width:13px; height:13px; }
+/* Раз в день: слова проявляются, как рассвет, и по карточке проходит тёплый свет */
+.verse.rise blockquote .w { display:inline-block; opacity:0; transform:translateY(6px); filter:blur(3px);
+  animation:v-word .7s cubic-bezier(.2,.7,.2,1) forwards; animation-delay:calc(var(--i) * 70ms + 250ms); }
+.verse.rise cite, .verse.rise .v-act { opacity:0; animation:v-fade .8s ease forwards; animation-delay:var(--after); }
+.verse.rise::after { content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(105deg,transparent 30%,var(--dawn-glow) 50%,transparent 70%); transform:translateX(-100%);
+  animation:v-sweep 2.4s ease-out .2s forwards; }
+@keyframes v-word { to { opacity:1; transform:none; filter:none; } }
+@keyframes v-fade { to { opacity:1; } }
+@keyframes v-sweep { to { transform:translateX(100%); } }
+@media (prefers-reduced-motion:reduce) {
+  .verse.rise blockquote .w, .verse.rise cite, .verse.rise .v-act { animation:none; opacity:1; transform:none; filter:none; }
+  .verse.rise::after { display:none; }
+}
