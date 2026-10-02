@@ -196,14 +196,13 @@ test("лента дня: работа, которая идёт сейчас, —
   await expect(page.locator("#day-tl li.cur")).toContainText("идёт · до 17:30, ещё 7 ч 30 мин");
 });
 
-test("стих дня: виден наверху, «Сделал» отмечает дело и засчитывает сферу", async ({ page }) => {
-  const { puts, errors } = await open(page);
+test("стих дня: виден наверху, с делом на сегодня и без кнопки", async ({ page }) => {
+  const { errors } = await open(page);
   const card = page.locator("#verse-card");
   await expect(card).toBeVisible();
   await expect(card.locator("cite")).not.toBeEmpty();
+  await expect(card).toContainText("Сегодня:");
   await expect(card).not.toContainText("{kid");
-  await card.locator('[data-verse="done"]').click();
-  await expect.poll(() => puts.at(-1)?.rituals?.verse?.[TODAY]).toBeTruthy();
-  await expect(card).toContainText("Сделано");
+  await expect(card.locator("button")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
