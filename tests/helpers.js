@@ -67,4 +67,4 @@ async function open(page, { time = "10:00", hash = "today", data = fixture() } =
   return { errors, puts, google };
 }
 
-module.exports = { TODAY, fixture, open };
+module.exports = { TODAY, day, fixture, open };

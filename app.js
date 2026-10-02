@@ -2777,6 +2777,10 @@ function savePrayer() {
   const m = Math.max(1, Math.min(300, Math.round(Number($("#pray-mins").value) || 0)));
   const prev = S.data.prayer[r.date] || [], plan = prPlan();
   const item = { s: r.s, m };
+  // Фактический конец и паузы — чтобы видеть, что молитву прервали (например, проснулся ребёнок)
+  const endAt = new Date(r.paused || Date.now()), pz = Math.round((r.idle || 0) / 60000);
+  item.e = `${pad(endAt.getHours())}:${pad(endAt.getMinutes())}`;
+  if (pz) item.pz = pz;
   if (plan.length) { item.p = Math.min(r.point || 0, plan.length); item.marks = (r.marks || []).map(ms => Math.round(ms / 1000)); }
   const ops = [{ t: "prayer", date: r.date, items: [...prev, item] }];
   const hid = prHabitId(), marked = hid && habits().some(x => x.id === hid && !x.archived) && !isDone(r.date, hid);
@@ -2835,10 +2839,18 @@ function renderPrayStats() {
   for (let i = 0; i < 14 && rows.length < 7; i++) {
     const d = addDays(t, -i), k = ymd(d), list = S.data.prayer[k] || [], w = wakeOf(k);
     if (!list.length) continue;
-    const first = list[0], end = toMin(first.s) + list.reduce((a, x) => a + x.m, 0);
-    const state = w == null ? "" : end <= w ? "ok" : "warn";
-    const val = w == null ? "подъём Марка не отмечен" : end <= w ? `запас ${fmtDur(w - end)}` : `Марк проснулся раньше на ${fmtDur(end - w)}`;
-    rows.push(`<li class="${state}"><span class="dot"></span><span class="ck-name">${fmtShort.format(d)}<span class="ck-sub">${hz(first.s)}–${hm(end)}${w != null ? ` · ${esc(kidName())} ${hm(w)}` : ""}</span></span><span class="ck-val">${val}</span></li>`);
+    // Все пробуждения этого утра: промежуточные (записаны в прошлую ночь) и подъём на день
+    const first = list[0], last = list[list.length - 1], start = toMin(first.s), name = kidName();
+    const end = last.e ? toMin(last.e) : start + list.reduce((a, x) => a + x.m, 0) + list.reduce((a, x) => a + (x.pz || 0), 0);
+    const pz = list.reduce((a, x) => a + (x.pz || 0), 0);
+    const wakes = [...(S.data.kid[ymd(addDays(d, -1))]?.nights || []).map(toMin).filter(x => x < 720), w].filter(x => x != null).sort((a, b) => a - b);
+    const during = wakes.find(x => x >= start && x < end), after = wakes.find(x => x >= end), before = wakes.filter(x => x < start);
+    const state = during != null ? "mid" : after != null ? "ok" : w != null ? "warn" : "";
+    const val = during != null ? `${name} проснулся в ${hm(during)}, посреди молитвы`
+      : after != null ? `запас ${fmtDur(after - end)}`
+      : w != null ? `${name} уже встал в ${hm(w)}`
+      : before.length ? `до молитвы просыпался в ${before.map(hm).join(", ")}` : `подъём ${kidGen()} не отмечен`;
+    rows.push(`<li class="${state}"><span class="dot"></span><span class="ck-name">${fmtShort.format(d)}<span class="ck-sub">${hz(first.s)}–${last.e ? "" : "≈ "}${hm(end)}${pz ? ` · пауза ${fmtDur(pz)}` : ""}</span></span><span class="ck-val">${esc(val)}</span></li>`);
   }
   $("#ps-when").innerHTML = rows.join("") || `<li class="empty">Появится после первых утренних молитв.</li>`;
 }

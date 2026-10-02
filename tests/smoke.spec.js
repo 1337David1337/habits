@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { TODAY, fixture, open } = require("./helpers");
+const { TODAY, day, fixture, open } = require("./helpers");
 
 const TABS = { today: "Главное на сегодня", plan: "Баланс сфер", prayer: "Молитвенные нужды", sleep: "Календарь подъёмов", results: "Неделя" };
 
@@ -162,4 +162,12 @@ test("вечер: ложное засыпание — «снова уснул» 
   await expect.poll(() => puts.at(-1)?.log?.[TODAY]?.duo).toBe(true);
   await expect(page.locator("#duo-card")).toContainText("сегодня было");
   expect(errors).toEqual([]);
+});
+
+test("молитва: пробуждение ненадолго посреди молитвы видно в «Успел до подъёма»", async ({ page }) => {
+  const data = fixture();
+  data.kid[day(-1)] = { bed: "23:35", nights: ["06:50", "08:04"] };
+  data.prayer[TODAY] = [{ s: "07:58", m: 14 }];
+  await open(page, { hash: "prayer", time: "08:30", data });
+  await expect(page.locator("#ps-when li").first()).toContainText("Тёма проснулся в 8:04, посреди молитвы");
 });
