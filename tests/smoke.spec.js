@@ -41,6 +41,8 @@ test("упор: нажатие добавляет дело в главное, п
 test("задачи из «Когда-нибудь» не предлагаются", async ({ page }) => {
   await open(page);
   const seen = new Set();
+  const more = page.locator("#bal-rec [data-bmore]");
+  if (await more.count()) await more.click();
   for (const alt of await page.locator("#bal-rec [data-balt]").all()) {
     for (let i = 0; i < 4; i++) {
       (await page.locator("#bal-rec button.pi").allInnerTexts()).forEach(t => seen.add(t));
@@ -184,7 +186,18 @@ test("баланс: сфера «по делу» без дел не подсве
   await expect(page.locator("#bal-batts")).not.toContainText("здоровье");
   await expect(page.locator("#bal-rec")).not.toContainText("здоровье", { ignoreCase: true });
   await page.goto("/#plan");
-  await expect(page.locator("#bl-list li.od", { hasText: "здоровье" })).toContainText("без ритма");
+  await expect(page.locator("#bl-list .bg-n.od", { hasText: "здоровье" })).toHaveCount(1);
+});
+
+test("баланс: клетка недели объясняет, что засчиталось, а лодка в «Итогах» видна", async ({ page }) => {
+  await open(page, { hash: "plan" });
+  const cell = page.locator("#bl-list .bg-c.on").first();
+  const label = await cell.getAttribute("aria-label");
+  await cell.click();
+  await expect(page.locator("#bl-detail")).toContainText(label.split(": ")[1].split(", ")[0]);
+  await page.goto("/#results");
+  await expect(page.locator("#keel-card")).toBeVisible();
+  await expect(page.locator("#keel-word")).not.toBeEmpty();
 });
 
 test("лента дня: работа, которая идёт сейчас, — под «сейчас», а не в прошлом", async ({ page }) => {

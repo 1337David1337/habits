@@ -2267,65 +2267,108 @@ function balanceRecs(tgtK, rows) {
 }
 function agoText(r) {
   const tk = ymd(todayDate());
-  if (r.onDemand) return r.ideas?.some(x => x.due && x.due < tk) ? "по делу · есть просроченное" : "по делу · подошёл срок";
+  if (r.onDemand) return r.ideas?.some(x => x.due && x.due < tk) ? "когда нужно · есть просроченное" : "когда нужно · подошёл срок";
   if (!r.last) return "давно не было";
   const n = Math.round((parse(tk) - parse(r.last)) / 864e5);
   return n === 0 ? "сегодня было" : n === 1 ? "было вчера" : `${n} ${plural(n, "день", "дня", "дней")} без внимания`;
 }
-// Заряд сферы: дни с вниманием за 7 дней от нормы. Больше 100% — сфере достаётся больше нормы
-const pctOf = r => r.norm ? Math.round(r.touched / r.norm * 100) : null;
-const battCls = p => p < 50 ? "low" : p < 100 ? "mid" : p <= 150 ? "full" : "over";
-const batt = r => { const p = pctOf(r); return `<span class="batt ${battCls(p)}" aria-hidden="true"><i style="width:${Math.min(100, p)}%"></i></span>`; };
-function skewText(rows) {
-  const over = rows.filter(r => !r.onDemand && r.touched >= 4 && r.touched > r.norm), under = rows.filter(r => r.late && r.touched / r.norm < .5);
-  const names = l => l.length > 3 ? `${l.slice(0, 3).map(r => `«${esc(r.s)}»`).join(", ")} и ещё ${l.length - 3}` : l.map(r => `«${esc(r.s)}»`).join(", ").replace(/, ([^,]*)$/, " и $1");
-  under.sort((a, b) => a.touched / a.norm - b.touched / b.norm || b.norm - a.norm);
-  if (over.length && under.length) return `Перекос: ${names(over)} — выше нормы, а ${names(under)} почти без внимания.`;
-  return "";
+// Неделя сферы словами: «2 из 3», перебор — не тревога, а «✓ +3»
+const dayWord = n => `${n} ${plural(n, "день", "дня", "дней")}`;
+function weekState(r) {
+  if (r.onDemand) return { cls: "od", t: "когда нужно" };
+  if (r.touched >= r.norm) return { cls: "ok", t: r.touched > r.norm ? `✓ +${r.touched - r.norm}` : "✓ готово" };
+  return { cls: r.late ? "need" : "", t: `ещё ${dayWord(r.norm - r.touched)}` };
+}
+// innerHTML — только когда что-то поменялось: анимация идёт на новые данные, а не на каждую перерисовку
+const setHtml = (el, html) => { if (el._h !== html) { el._h = html; el.innerHTML = html; } };
+// Кольцо сферы на «Сегодня»: замкнулось — дней хватает. Янтарное — только у сфер, которым Keel советует время сейчас
+const RING_C = (2 * Math.PI * 15).toFixed(1);
+function ringHtml(r, hot) {
+  const p = Math.min(1, r.touched / r.norm), cls = r.touched >= r.norm ? "ok" : hot ? "hot" : "";
+  return `<span class="rg ${cls}"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rg-t" cx="20" cy="20" r="15"/>${p ? `<circle class="rg-a" cx="20" cy="20" r="15" style="--c:${RING_C};stroke-dasharray:${RING_C};stroke-dashoffset:${(RING_C * (1 - p)).toFixed(1)}"/>` : ""}</svg>`
+    + `<b>${r.touched}<small>/${r.norm}</small></b><span class="rg-n">${esc(r.s)}</span></span>`;
 }
 function renderBalance() {
   const sp = settings().spheres || [];
-  $("#bal-batts").hidden = $("#bal-sub").hidden = $("#balance").hidden = !sp.length;
+  $("#bal-batts").hidden = $("#bal-sub").hidden = $("#balance").hidden = $("#keel-card").hidden = !sp.length;
   if (!sp.length) return;
   const tgt = planTarget(), tgtK = ymd(tgt), tk = ymd(todayDate()), isT = tgtK === tk, rows = balance(tgtK), st = settings();
   const chosen = (S.data.focus[tgtK] || []).length;
   // До полудня предложения идут в главное на сегодня (прямо в список выше), после — на завтра
-  // Полоски — баланс недели по всем сферам; ниже отдельно — только те, кому пора уделить время
-  $("#bal-title").innerHTML = `Баланс недели<small>${isT ? "зелёный — норма есть" : `на завтра выбрано ${chosen} из 3`}</small>`;
-  // три дела на сегодня выбраны — заряд сфер остаётся, предложения прячем
+  $("#bal-title").innerHTML = `Сферы за неделю<small>${isT ? "подробнее — в «Плане»" : `на завтра выбрано ${chosen} из 3`}</small>`;
+  // три дела на сегодня выбраны — кольца остаются, предложения прячем
   $("#bal-rec").hidden = isT && chosen >= 3;
-  $("#bal-batts").innerHTML = rows.filter(r => !r.onDemand).map(r => { const p = pctOf(r);
-    return `<div class="bt ${battCls(p)}" role="img" aria-label="${esc(r.s)}: заряд ${p}%, ${r.touched} из ${r.norm} дней"><span class="bt-n">${esc(r.s)}</span><span class="bt-r">${batt(r)}<b>${p}%</b></span></div>`; }).join("");
-  const recs = balanceRecs(tgtK, rows), focus = S.data.focus[tgtK] || [], full = focus.length >= 3;
+  const recs = balanceRecs(tgtK, rows), hot = new Set(recs.map(r => r.s)), rhythm = rows.filter(r => !r.onDemand);
+  setHtml($("#bal-batts"), rhythm.map(r => ringHtml(r, hot.has(r.s))).join(""));
+  $("#bal-batts").setAttribute("aria-label", `Сферы за неделю: ${rhythm.map(r => `${r.s} ${r.touched} из ${r.norm}`).join(", ")}. Открыть в «Плане»`);
+  const focus = S.data.focus[tgtK] || [], full = focus.length >= 3;
   const inFocus = x => focus.some(f => (x.taskId && f.taskId === x.taskId) || f.t === x.t);
   const busy = (st.busyDays || []).includes(dow(tgt)) && st.busyLabel;
+  // На виду одна сфера — самая отставшая; остальные по кнопке, чтобы не разбегались глаза
+  const more = recs.length - 1, open = !!S.balMore;
   S.balIdeas = [];
   S.balAlt ||= {};
   $("#bal-rec").innerHTML = recs.length
     ? `<p class="bal-h2">Пора уделить время ${isT ? "сегодня" : "завтра"}</p>` + (busy ? `<p class="note" style="margin:0">${isT ? "Сегодня" : "Завтра"} вечер — ${esc(st.busyLabel)}, поэтому одно короткое дело.</p>` : "")
-      + recs.map(r => {
+      + recs.map((r, n) => {
         const j = (S.balAlt[r.s] || 0) % r.ideas.length, x = r.ideas[j], i = S.balIdeas.push({ ...x, s: r.s }) - 1, on = inFocus(x);
-        return `<div class="pick"><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "late-t" : ""}">${agoText(r)}${r.onDemand ? "" : ` · ${r.touched} из ${r.norm}`}</span>
+        return `<div class="pick"${n && !open ? " hidden" : ""}><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "late-t" : ""}">${agoText(r)}${r.onDemand ? "" : ` · ${r.touched} из ${r.norm}`}</span>
           ${r.ideas.length > 1 ? `<button type="button" class="alt" data-balt="${esc(r.s)}" aria-label="Другое дело для сферы «${esc(r.s)}» (${j + 1} из ${r.ideas.length})" title="Другое дело">↻</button>` : ""}</div>
           <button type="button" class="pi${x.from === "idea" ? " idea" : ""}${on ? " on" : ""}" data-badd="${i}" aria-pressed="${on}" ${!on && full ? "disabled" : ""} aria-label="${on ? "Убрать из главного" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(fromLine(x))}</small></span><span class="plus">${on ? "✓" : "+"}</span></button></div>`;
       }).join("")
-      + (full ? `<p class="note" style="margin:0">На завтра уже три дела. Нажми на выбранное, чтобы убрать.</p>` : "")
+      + (more > 0 ? `<button type="button" class="linkbtn bal-more" data-bmore aria-expanded="${open}">${open ? "Свернуть" : `Ещё ${more} ${plural(more, "сфера просит", "сферы просят", "сфер просят")} времени`}</button>` : "")
+      + (full ? `<p class="note" style="margin:0">На ${isT ? "сегодня" : "завтра"} уже три дела. Нажми на выбранное, чтобы убрать.</p>` : "")
     : `<p class="bal-ok">Все сферы в своей норме — можно идти по обычному плану.</p>`;
   renderBalanceStats(rows);
+  renderKeel(rows);
 }
+const capF = s => s.charAt(0).toUpperCase() + s.slice(1);
+const dayLabel = k => { const d = parse(k); return `${DOW[dow(d)].toLowerCase()}, ${d.getDate()}`; };
+// «План»: неделя клетками — видно, что и в какой день засчиталось
 function renderBalanceStats(rows) {
-  const tk = ymd(todayDate()), skew = skewText(rows);
-  const ok = rows.every(r => r.touched >= r.norm);
-  $("#bl-skew").innerHTML = skew || (ok ? "Все сферы в своей норме за неделю." : "");
-  $("#bl-skew").className = "bal-skew" + (skew ? "" : " ok");
-  $("#bl-skew").hidden = !skew && !ok;
-  if (!document.activeElement?.closest?.("#bl-list"))
-    $("#bl-list").innerHTML = rows.map(r => `<li class="${r.onDemand ? "od" : battCls(pctOf(r))}"><span class="bn">${esc(r.s)}</span>${r.onDemand
-        ? `<span class="od-t">${r.touched ? `было ${r.touched} ${plural(r.touched, "день", "дня", "дней")} за неделю` : "без ритма — когда есть дело"}</span>`
-        : `${batt(r)}<b class="bp">${pctOf(r)}%</b><span class="bs">${r.touched} из</span>`}
-      <select class="field mini" data-norm="${esc(r.s)}" aria-label="Норма для сферы «${esc(r.s)}», дней в неделю">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === r.norm ? "selected" : ""}>${n || "по делу"}</option>`).join("")}</select></li>`).join("");
+  const tk = ymd(todayDate()), week = rows[0].week;
+  S.balRows = rows;
+  setHtml($("#bl-list"), `<span></span>${week.map(d => `<span class="bg-d${d.k === tk ? " t" : ""}">${d.k === tk ? "сег" : DOW[dow(parse(d.k))].toLowerCase()}</span>`).join("")}<span></span>`
+    + rows.map((r, i) => {
+      const st = weekState(r);
+      return `<span class="bg-n${r.onDemand ? " od" : ""}">${esc(r.s)}</span>`
+        + r.week.map((d, j) => `<button type="button" class="bg-c${d.what ? " on" : ""}" data-bg="${i}:${j}" style="--i:${i + j}" aria-label="${esc(r.s)}, ${dayLabel(d.k)}: ${d.what ? esc([...new Set(d.what)].join(", ")) : "не было"}"></button>`).join("")
+        + `<span class="bg-s ${st.cls}">${r.onDemand ? "" : `<b>${r.touched}</b> из ${r.norm}`}<small>${st.t}</small></span>`;
+    }).join(""));
   $("#bl-care").innerHTML = careChips(tk);
+  if (!document.activeElement?.closest?.("#bal-norms"))
+    $("#bal-norms ul").innerHTML = rows.map(r => `<li><span>${esc(r.s)}</span><select class="field mini" data-norm="${esc(r.s)}" aria-label="Сколько дней в неделю нужно сфере «${esc(r.s)}»">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === r.norm ? "selected" : ""}>${n ? `${dayWord(n)} в неделю` : "когда нужно"}</option>`).join("")}</select></li>`).join("");
   renderBalanceLists(); renderBalanceTags();
+}
+function balDetail(i, j) {
+  const r = S.balRows?.[i], d = r?.week[j];
+  if (!d) return;
+  $("#bl-list").querySelectorAll(".bg-c.sel").forEach(c => c.classList.remove("sel"));
+  $(`#bl-list [data-bg="${i}:${j}"]`)?.classList.add("sel");
+  const what = d.what ? [...new Set(d.what)].join(", ") : "ничего не засчиталось";
+  const tail = r.onDemand ? "Сфера без ритма: Keel предложит её, когда есть дело со сроком."
+    : r.touched ? `За неделю ${r.touched} из ${r.norm}.` : `За неделю ни разу${r.last ? `, последний раз ${dayLabel(r.last)}` : ""}. Нужно ${dayWord(r.norm)} в неделю.`;
+  $("#bl-detail").innerHTML = `<b>${esc(capF(r.s))}, ${dayLabel(d.k)}:</b> ${esc(what)}. ${tail}`;
+}
+// «Итоги»: лодка кренится, когда одним сферам достаётся больше нормы, а другим почти ничего
+function renderKeel(rows) {
+  const rr = rows.filter(r => !r.onDemand), box = $("#keel-card");
+  box.hidden = !rr.length;
+  if (!rr.length) return;
+  const ratio = r => Math.min(2, r.touched / r.norm), over = rr.filter(r => r.touched > r.norm), under = rr.filter(r => ratio(r) < .5);
+  const spread = rr.reduce((a, r) => a + Math.abs(ratio(r) - 1), 0) / rr.length;
+  const deg = Math.min(over.length && under.length ? 18 : 6, Math.round(spread * 22));
+  $("#keel-word").textContent = deg < 5 ? "идёшь ровно" : deg < 12 ? "небольшой крен" : "сильный крен";
+  const wave = (y, cls) => `<path class="${cls}" d="M0 ${y}${" q15 -6 30 0 t30 0".repeat(8)} V200 H0 Z"/>`;
+  setHtml($("#keel-boat"), `<svg viewBox="0 0 360 190" role="img" aria-label="Лодка накренилась на ${deg}°">${wave(132, "w1")}
+    <g class="tilt" style="--deg:${-deg}deg"><g class="bob">
+      <path class="kl" d="M180 130 L174 178 H186 Z"/><path class="hull" d="M96 116 H264 L244 140 H116 Z"/>
+      <line class="mast" x1="180" y1="116" x2="180" y2="28"/><path class="s1" d="M184 32 V110 H240 Z"/><path class="s2" d="M176 40 V110 H132 Z"/>
+    </g></g>${wave(146, "w2")}</svg>`);
+  const list = l => l.map(r => `${esc(capF(r.s))} <span>${r.touched} из ${r.norm}</span>`).join("<br>");
+  $("#keel-sides").innerHTML = over.length || under.length
+    ? `<div><b>Перевес</b>${list(over) || "нет"}</div><div><b>Выровнять</b>${list(under) || "нет"}</div>`
+    : `<p class="bal-ok">Все сферы около своей нормы.</p>`;
 }
 const CARE_MARK = "отмечено вручную";
 // Кнопки «уделил время сфере» за день k: что уже видно по привычкам и задачам, отмечено само
@@ -2409,6 +2452,9 @@ document.addEventListener("click", e => {
     if (W.kind) renderWizard();
     return;
   }
+  const g = e.target.closest("[data-bg]");
+  if (g) { const [i, j] = g.dataset.bg.split(":").map(Number); balDetail(i, j); return; }
+  if (e.target.closest("[data-bmore]")) { S.balMore = !S.balMore; renderBalance(); return; }
   const a = e.target.closest("[data-balt]");
   if (a) { S.balAlt[a.dataset.balt] = (S.balAlt[a.dataset.balt] || 0) + 1; renderBalance(); return; }
   const b = e.target.closest("[data-badd]");
@@ -2418,7 +2464,7 @@ $("#bal-tags").addEventListener("change", e => {
   const el = e.target.closest("[data-tag]");
   if (el && canWrite()) { op({ t: "tag", id: el.dataset.tag, sphere: el.value }); el.blur(); }
 });
-$("#bl-list").addEventListener("change", e => {
+$("#bal-norms").addEventListener("change", e => {
   const el = e.target.closest("[data-norm]");
   if (el && canWrite()) { setSetting({ sphereNorms: { ...(settings().sphereNorms || {}), [el.dataset.norm]: Number(el.value) } }); el.blur(); }
 });

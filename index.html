@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=PT+Serif:ital@0;1&display=swap">
-<link rel="stylesheet" href="style.css?v=39">
+<link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -95,8 +95,8 @@
         <section class="card bal" id="focus-card">
           <div class="card-h"><h2>Главное на сегодня</h2><small id="focus-count"></small></div>
           <ul class="focus" id="focus-list"></ul>
-          <div class="bal-sub" id="bal-sub" hidden><p class="bal-h" id="bal-title">Баланс недели</p>
-            <a class="batts" id="bal-batts" href="#plan" aria-label="Заряд сфер — открыть баланс в «Плане»" hidden></a>
+          <div class="bal-sub" id="bal-sub" hidden><p class="bal-h" id="bal-title">Сферы за неделю</p>
+            <a class="rings" id="bal-batts" href="#plan" hidden></a>
             <div class="bal-rec" id="bal-rec"></div></div>
         </section>
         <section class="card">
@@ -212,12 +212,13 @@
       </section>
       <section class="card span2 bal" id="balance" hidden>
         <div class="card-h"><h2>Баланс сфер</h2><small>последние 7 дней</small></div>
-        <p class="bal-skew" id="bl-skew" hidden></p>
-        <ul class="bal-list" id="bl-list"></ul>
-        <p class="note">Заряд — дни, когда сфера получала время за последние 7 дней, от нормы: 2 из 5 = 40%. Больше 100% — сфере достаётся больше нормы. Норму можно поменять: от неё зависит, какие сферы попадут в «Пора уделить время». Норма «по делу» — для сфер, которым не нужно время по расписанию (здоровье, дом): они не подсвечиваются и попадают туда, только когда есть задача со сроком или шаг цели.</p>
+        <div class="bgrid" id="bl-list"></div>
+        <p class="bg-detail" id="bl-detail" aria-live="polite">Нажми на клетку — покажу, что засчиталось в этот день.</p>
         <p class="pick-h">Сегодня уделил время</p>
         <div id="bl-care"></div>
-        <p class="note">Само отмечается по привычкам, сделанным задачам и главному, шагам в слотах, времени вдвоём, молитве и вечерам в церкви. Остальное отметь здесь или в «Вечерних 5 минутах».</p>
+        <p class="note">Привычки, сделанные задачи, время вдвоём и молитва отмечаются сами. Остальное — здесь или в «Вечерних 5 минутах».</p>
+        <details class="bal-tags" id="bal-norms"><summary>Сколько дней в неделю нужно сфере</summary>
+          <p class="note">«Когда нужно» — для сфер без ритма, вроде здоровья и дома: на графике у них нет цели, а Keel предложит их, только когда есть дело со сроком или шаг цели.</p><ul></ul></details>
         <details class="bal-tags" id="bal-lists" hidden><summary>Списки Google и сферы</summary>
           <p class="note">Задачи списка получают его сферу. «По словам» — сфера угадывается по названию задачи, «не предлагать» — для парковки вроде «Когда-нибудь»: такие задачи не попадут в рекомендации, пока не перенесёшь их в другой список.</p><ul></ul></details>
         <details class="bal-tags" id="bal-tags" hidden><summary>Сферы задач</summary><ul></ul></details>
@@ -292,6 +293,11 @@
 
     <!-- ================= ИТОГИ ================= -->
     <div class="view" data-view="results" hidden>
+      <section class="card span2 keel" id="keel-card" hidden>
+        <div class="card-h"><h2>Равновесие недели</h2><small id="keel-word"></small></div>
+        <a class="keel-boat" id="keel-boat" href="#plan" aria-label="Баланс сфер — открыть в «Плане»"></a>
+        <div class="keel-sides" id="keel-sides"></div>
+      </section>
       <section class="card span2" id="week">
         <div class="card-h">
           <h2>Неделя</h2>
@@ -576,6 +582,6 @@
 <div class="tip" id="tip" hidden></div>
 <script src="demo-data.js?v=1"></script>
 <script src="verses.js?v=2"></script>
-<script src="app.js?v=45"></script>
+<script src="app.js?v=46"></script>
 </body>
 </html>

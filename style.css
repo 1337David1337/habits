@@ -667,18 +667,6 @@ ul.needs { list-style:none; margin:10px 0 0; padding:0; }
 .bal-rec .br-h b::first-letter { text-transform:uppercase; }
 .bal-rec .br-h span { text-align:right; }
 .bal-ok { margin:0; padding:10px 12px; border-radius:12px; background:var(--teal-bg); color:var(--teal); font-size:14px; }
-ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
-.bal-list li { display:grid; grid-template-columns:76px minmax(40px,1fr) 40px auto auto; gap:8px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); }
-.bal-list li:last-child { border-bottom:0; }
-.bal-list .bn { font-size:14.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bal-list .bn::first-letter { text-transform:uppercase; }
-.bal-list .bd { display:flex; gap:3px; }
-.bal-list .bd i { width:12px; height:12px; border-radius:4px; background:var(--s0); }
-.bal-list .bd i.on { background:var(--s3); }
-.bal-list .bd i.t { box-shadow:inset 0 0 0 1.5px var(--line2); }
-.bal-list .bd i.on.t { box-shadow:none; background:var(--s4); }
-.bal-list .bs { font-size:13px; color:var(--faint); white-space:nowrap; text-align:right; }
-.bal-list .field.mini { margin-left:-4px; }
 .bal-skew.ok { background:var(--teal-bg); color:var(--teal); }
 .bal-rec .br-h .alt { flex:none; width:36px; height:36px; border-radius:50%; border:0; background:var(--field); color:var(--soft); font-size:15px; line-height:1; padding:0; }
 .bal-rec .br-h span { flex:1; }
@@ -721,23 +709,6 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .bal .pick button.pi.idea { background:none; border:1.5px dashed var(--line2); }
 
 /* ---------- заряд сфер ---------- */
-.batt { position:relative; display:block; height:12px; border-radius:4px; background:var(--s0); margin-right:3px; }
-.batt::after { content:""; position:absolute; right:-3px; top:3px; width:2px; height:6px; border-radius:0 2px 2px 0; background:var(--line2); }
-.batt i { display:block; height:100%; border-radius:4px; min-width:3px; }
-.batt.low i { background:var(--warn); }
-.batt.mid i { background:var(--amber); }
-.batt.full i { background:var(--teal); }
-.batt.over i { background:var(--violet); }
-.batts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px 12px; margin:0 0 14px; }
-.bt { min-width:0; }
-.bt-n { display:block; font-size:12.5px; color:var(--soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bt-n::first-letter { text-transform:uppercase; }
-.bt-r { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; align-items:center; }
-.bt-r b, .bal-list .bp { font-size:12.5px; font-weight:600; text-align:right; }
-.bt.low b, .bal-list li.low .bp { color:var(--warn); }
-.bt.mid b, .bal-list li.mid .bp { color:var(--amber); }
-.bt.full b, .bal-list li.full .bp { color:var(--teal); }
-.bt.over b, .bal-list li.over .bp { color:var(--violet); }
 .pick button.pi.on, .bal .pick button.pi.on { background:var(--teal-bg); border-color:transparent; }
 .pick button.pi.on .plus { background:var(--teal); color:var(--on-accent); }
 .pick button.pi[aria-pressed="true"] { background:var(--teal-bg); border-color:transparent; }
@@ -752,8 +723,6 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 @media (max-width:420px) { .cell { width:28px; height:28px; border-radius:8px; } .week th, .week td { padding:5px 1px; } }
 
 /* ---------- «Главное» с упором и заряд сфер ---------- */
-#focus-card .batts { margin:0 0 12px; padding:10px 12px; border-radius:14px; background:var(--field); text-decoration:none; color:inherit; gap:8px 12px; }
-#focus-card .batts:hover { box-shadow:inset 0 0 0 1.5px var(--line2); }
 .bal-sub { margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
 .bal-h { margin:0 0 10px; font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
 .bal-h small { font-size:12.5px; font-weight:500; color:var(--faint); }
@@ -781,7 +750,6 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
   .kbtn .kgo { grid-column:2; justify-self:start; margin-top:2px; }
 }
 .late-t { color:var(--amber); }
-#focus-card .bal-sub .batts { margin:0 0 12px; }
 .splan li { grid-template-columns:120px minmax(0,1fr); }
 @media (max-width:420px) { .splan li { grid-template-columns:minmax(0,1fr); } }
 .sheet ul.splan.card { padding:12px 14px; }
@@ -806,7 +774,6 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .fc-next:empty { display:none; }
 .fc-box.me.done .fc-big { color:var(--soft); opacity:.75; }
 /* сфера «по делу»: без заряда и без красного */
-.bal-list li.od .od-t { grid-column:2 / 5; font-size:13px; color:var(--faint); }
 
 /* ---------- стих дня ---------- */
 .verse { position:relative; overflow:hidden; background:linear-gradient(135deg,var(--dawn-a),var(--dawn-b)); box-shadow:none; padding:18px 20px 16px; }
@@ -831,3 +798,61 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
   .verse.rise blockquote .w, .verse.rise cite, .verse.rise .v-act { animation:none; opacity:1; transform:none; filter:none; }
   .verse.rise::after { display:none; }
 }
+
+/* Кольца сфер на «Сегодня»: тихие, янтарным — только те, кому Keel советует время сейчас */
+.rings { display:grid; grid-template-columns:repeat(auto-fill,minmax(54px,1fr)); gap:8px 4px; margin:0 0 12px; padding:10px 6px 8px; border-radius:14px; background:var(--field); text-decoration:none; color:inherit; }
+.rings:hover { box-shadow:inset 0 0 0 1.5px var(--line2); }
+.rg { position:relative; display:grid; justify-items:center; gap:2px; min-width:0; }
+.rg svg { width:40px; height:40px; transform:rotate(-90deg); }
+.rg circle { fill:none; stroke-width:5; }
+.rg .rg-t { stroke:var(--line2); }
+.rg .rg-a { stroke:var(--s2); stroke-linecap:round; animation:rg-in 1s cubic-bezier(.2,.8,.2,1) both; }
+.rg.ok .rg-a { stroke:var(--teal); }
+.rg.hot .rg-a { stroke:var(--amber); }
+.rg b { position:absolute; top:0; height:40px; line-height:40px; font-size:12.5px; font-weight:600; }
+.rg b small { font-size:10px; font-weight:500; color:var(--faint); }
+.rg-n { max-width:100%; font-size:11.5px; color:var(--soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rg-n::first-letter, .bg-n::first-letter { text-transform:uppercase; }
+.rg.hot .rg-n { color:var(--amber); font-weight:600; }
+@keyframes rg-in { from { stroke-dashoffset:var(--c); } }
+.bal-more { justify-self:start; font-size:13.5px; }
+
+/* «План»: неделя клетками */
+.bgrid { display:grid; grid-template-columns:minmax(0,76px) repeat(7,minmax(0,1fr)) minmax(70px,auto); gap:6px 4px; align-items:center; }
+.bg-d { font-size:11px; color:var(--faint); text-align:center; }
+.bg-d.t { color:var(--ink); font-weight:700; }
+.bg-n { font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bg-n.od { color:var(--faint); }
+.bg-c { aspect-ratio:1; min-width:0; border:0; padding:0; border-radius:7px; background:var(--field); animation:bg-in .4s cubic-bezier(.3,1.6,.5,1) both; animation-delay:calc(var(--i) * 30ms); }
+.bg-c.on { background:var(--teal); }
+.bg-n.od ~ .bg-c.on { background:var(--s2); }
+.bg-c.sel { outline:2px solid var(--ink); outline-offset:1px; }
+@keyframes bg-in { from { transform:scale(.3); opacity:0; } }
+.bg-s { font-size:12.5px; text-align:right; line-height:1.25; white-space:nowrap; }
+.bg-s b { font-size:14px; }
+.bg-s small { display:block; font-size:12px; color:var(--faint); }
+.bg-s.need small { color:var(--amber); font-weight:600; }
+.bg-s.ok small { color:var(--teal); font-weight:600; }
+.bg-detail { margin:12px 0 6px; padding:10px 12px; border-radius:12px; background:var(--field); color:var(--soft); font-size:14px; line-height:1.4; }
+.bg-detail b { color:var(--ink); }
+#bal-norms li span::first-letter { text-transform:uppercase; }
+
+/* «Итоги»: киль */
+.keel-boat { display:block; border-radius:16px; overflow:hidden; background:var(--k0); }
+.keel-boat svg { display:block; width:100%; height:auto; }
+.keel .tilt { transform-origin:180px 128px; transform:rotate(var(--deg)); animation:heel 1.8s cubic-bezier(.3,1.4,.4,1) both; }
+@keyframes heel { from { transform:rotate(0); } }
+.keel .bob { transform-origin:180px 128px; animation:bob 4s ease-in-out infinite; }
+@keyframes bob { 50% { transform:translateY(3px) rotate(.6deg); } }
+.keel .hull { fill:var(--soft); } .keel .kl { fill:var(--soft); opacity:.5; }
+.keel .mast { stroke:var(--soft); stroke-width:3; }
+.keel .s1 { fill:var(--teal); } .keel .s2 { fill:var(--s2); }
+.keel .w1 { fill:var(--k2); opacity:.7; animation:wave 6s linear infinite; }
+.keel .w2 { fill:var(--k3); opacity:.45; animation:wave 9s linear infinite reverse; }
+@keyframes wave { to { transform:translateX(-120px); } }
+.keel-sides { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; font-size:14px; line-height:1.45; }
+.keel-sides > p { grid-column:1 / -1; }
+.keel-sides div { padding:10px 12px; border-radius:12px; background:var(--field); }
+.keel-sides b { display:block; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--faint); }
+.keel-sides span { color:var(--faint); }
+@media (prefers-reduced-motion:reduce) { .rg .rg-a, .bg-c, .keel .tilt, .keel .bob, .keel .w1, .keel .w2 { animation:none; } }
