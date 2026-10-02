@@ -137,3 +137,29 @@ test("напоминания: время сохраняется, на устро
   expect((await page.request.get("/sw.js")).ok()).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test("сон: после своего подъёма вместо плана — «Ты встал»", async ({ page }) => {
+  const data = fixture();
+  data.me[TODAY] = { wake: "06:50" };
+  await open(page, { hash: "sleep", time: "07:10", data });
+  await expect(page.locator("#fc-me-l")).toHaveText("Ты встал");
+  await expect(page.locator("#fc-alarm")).toHaveText("6:50");
+});
+
+test("вечер: ложное засыпание — «снова уснул» переносит отбой, карточка вдвоём считает окно", async ({ page }) => {
+  const data = fixture();
+  data.settings.eveningHabit = "duo";
+  data.habits.push({ id: "duo", name: "Молитва и чтение с женой", sphere: "жена", target: 5, order: 4, archived: false, created: "2026-09-01" });
+  data.kid[TODAY] = { bed: "21:50", nights: ["22:00"] };
+  const { puts, errors } = await open(page, { time: "22:05", data });
+  await expect(page.locator("#kid-night-l")).toContainText("проснулся ненадолго");
+  await expect(page.locator("#kid-sleep-l")).toHaveText("Тёма снова уснул");
+  await expect(page.locator("#duo-card")).toContainText("снова уснул");
+  await page.locator("#kid-sleep").click();
+  await expect.poll(() => puts.at(-1)?.kid?.[TODAY]).toEqual({ bed: "22:05", tries: [{ s: "21:50", w: "22:00" }] });
+  await expect(page.locator("#duo-card")).toContainText("Начинайте в 22:25");
+  await page.locator('#duo-card [data-duo="done"]').click();
+  await expect.poll(() => puts.at(-1)?.log?.[TODAY]?.duo).toBe(true);
+  await expect(page.locator("#duo-card")).toContainText("сегодня было");
+  expect(errors).toEqual([]);
+});

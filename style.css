@@ -787,3 +787,15 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .demo-bar span { flex:1 1 200px; color:var(--soft); }
 .demo-bar a { font-weight:600; color:var(--amber); }
 #remind .row-btns:empty { display:none; }
+/* вечер вдвоём */
+.duo-card .r-ic { width:40px; height:40px; border-radius:12px; background:var(--card); display:grid; place-items:center; flex:none; }
+.duo-card .r-ic svg { width:22px; height:22px; }
+.duo-card .eyebrow { display:block; font-size:12px; color:var(--faint); margin-bottom:2px; }
+.duo-card .pc-t > span:last-child { display:block; margin-top:2px; }
+.duo-card .btn.ghost { background:var(--card); color:var(--violet); }
+.duo-card.met .btn { background:transparent; color:var(--teal); }
+.tl .duo::before { background:var(--violet); }
+/* сон: промежуточные пробуждения и «ты уже встал» */
+.fc-box p.fc-next { margin-top:8px; font-size:13px; color:var(--faint); }
+.fc-next:empty { display:none; }
+.fc-box.me.done .fc-big { color:var(--soft); opacity:.75; }

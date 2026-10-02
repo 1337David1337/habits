@@ -212,10 +212,10 @@ function commitMsg(ops) {
   const days = [...new Set([...on, ...off].map(o => fmtDM.format(parse(o.date))))];
   const parts = [];
   if (on.length || off.length) parts.push(`Отметки ${days.join(", ")}: ${[on.length && "+" + on.length, off.length && "−" + off.length].filter(Boolean).join(" ")}`);
-  const F = { wake: "подъём", bed: "отбой", nights: "ночью" };
+  const F = { wake: "подъём", bed: "отбой", nights: "просыпался", tries: "ложно засыпал" };
   const kidOps = ops.filter(o => o.t === "kid"), kidSet = kidOps.flatMap(o => Object.entries(o.data).filter(([, v]) => v != null && v !== ""));
   const kid = kidOps.flatMap(o => Object.entries(o.data).filter(([, v]) => !kidSet.length || (v != null && v !== "")).map(([f, v]) =>
-    `${F[f] || f} ${fmtDM.format(parse(o.date))} ${Array.isArray(v) ? v.join(", ") : v || "удалён"}`));
+    `${F[f] || f} ${fmtDM.format(parse(o.date))} ${Array.isArray(v) ? v.map(x => x.s ? `${x.s}→${x.w}` : x).join(", ") : v || "удалён"}`));
   if (kid.length) parts.push(`${kidName()}: ${kid.join(", ")}`);
   const meOps = ops.filter(o => o.t === "me"), meSet = meOps.some(o => o.data.wake);
   const me = meOps.filter(o => !meSet || o.data.wake).filter(o => o.data.wake || !kidSet.length).map(o => `${fmtDM.format(parse(o.date))} ${o.data.wake || "удалён"}`);
@@ -466,15 +466,126 @@ function kidButtons() {
   const night0 = hr >= 17 ? tk : ymd(addDays(t, -1));
   const kd = S.data?.kid || {}, bed = bedOf(nd), wake = wakeOf(tk), me = meWakeOf(tk);
   const morning = hr >= 4 && hr < 14;
+  // Последнее пробуждение этой ночи: если оно в первые 2 часа после засыпания — это было ложное засыпание
+  const nw = (kd[nd]?.nights || []).map(bedMinOf).filter(x => x != null), lastW = nw.length ? Math.max(...nw) : null, nowN = evNow();
   return {
     wake: morning && wake == null,
     me: hr >= 3 && hr < 14 && me == null,
     bed0: (nowMin() >= bedFrom() || hr < 4) && bed == null,
-    night: (hr >= 17 || hr < 10) && bed != null && !(hr < 14 && wake != null),
-    bed, nights: kd[nd]?.nights || [], night0,
+    night: (hr >= 17 || hr < 12) && bed != null && !(hr < 14 && wake != null),
+    resleep: (hr >= 17 || hr < 3) && bed != null && lastW != null && lastW - bed <= 120 && nowN >= lastW && nowN - lastW <= 180,
+    bed, nights: kd[nd]?.nights || [], tries: kd[nd]?.tries || [], lastW, night0,
     bedDone: bedOf(night0), nightsDone: kd[night0]?.nights || [],
     wakeDone: hr >= 17 ? null : wake, meDone: hr >= 17 ? null : me,
   };
+}
+const evNow = () => { const m = nowMin(); return m < 720 ? m + 1440 : m; };
+// Отрезки сна одной ночи: от засыпания (или прошлого пробуждения) до следующего пробуждения
+function nightStretches(k) {
+  const v = S.data.kid[k] || {}, bed = bedMinOf(v.bed);
+  if (bed == null) return [];
+  const fin = wakeOf(ymd(addDays(parse(k), 1)));
+  const ws = (v.nights || []).map(bedMinOf).filter(w => w != null && w > bed);
+  if (fin != null) ws.push(fin + 1440);
+  ws.sort((a, b) => a - b);
+  const out = [];
+  let from = bed;
+  ws.forEach(w => { if (w > from) { out.push({ from, len: w - from }); from = w; } });
+  return out;
+}
+// Следующее пробуждение: сколько обычно длится отрезок сна, если он уже продлился столько, сколько сейчас
+function nextWake() {
+  const k = bedDateNow(), v = S.data.kid[k] || {}, bed = bedMinOf(v.bed), now = evNow();
+  if (bed == null || now < bed || wakeOf(ymd(addDays(parse(k), 1))) != null) return null;
+  const ws = (v.nights || []).map(bedMinOf).filter(w => w != null && w > bed && w <= now);
+  const last = ws.length ? Math.max(...ws) : bed, el = now - last;
+  // Первый отрезок после отбоя обычно длинный, следующие — короче: сравниваем с такими же
+  const first = !ws.length, pool = [];
+  for (let i = 0; i <= 30; i++) nightStretches(ymd(addDays(parse(k), -i))).forEach((x, j) => { if ((j === 0) === first) pool.push(x.len); });
+  if (pool.length < 5) return { last, need: 5 - pool.length };
+  const rest = pool.filter(x => x > el).map(x => x - el);
+  if (rest.length < 3) return { last, long: true };
+  const one = rest.map(() => 1);
+  const at = now + wq(rest, one, .5), fc = forecast(ymd(addDays(parse(k), 1)));
+  // Утром следующее пробуждение, скорее всего, уже на день — тогда ответ даёт прогноз подъёма
+  if (fc && at >= fc.lo + 1440) return { last, morning: true };
+  return { last, at, lo: now + wq(rest, one, .25), hi: now + wq(rest, one, .75) };
+}
+/* ---------- вечер вдвоём ---------- */
+const evHabit = () => { const id = settings().eveningHabit; return id ? habits().find(h => h.id === id && !h.archived) || null : null; };
+const evMinutes = () => settings().eveningMinutes || 30;
+// Каждое засыпание вечером (ложное и окончательное) — сколько минут прошло до следующего пробуждения
+function onsets(days = 45) {
+  const t = todayDate(), out = [];
+  for (let i = 0; i <= days; i++) {
+    const k = ymd(addDays(t, -i)), v = S.data.kid[k];
+    if (!v) continue;
+    (v.tries || []).forEach(x => { const a = bedMinOf(x.s), b = bedMinOf(x.w); if (a != null && b > a) out.push(b - a); });
+    const st = nightStretches(k);
+    if (st.length) out.push(st[0].len);
+  }
+  return out;
+}
+// Сколько ждать после засыпания, чтобы за время молитвы и чтения он скорее всего не проснулся:
+// самая короткая выдержка, после которой просыпался в ближайшие evMinutes не чаще чем в 1 случае из 5
+const LIGHT_DEFAULT = 20;
+function lightSleep() {
+  const on = onsets(), len = evMinutes();
+  // Пока засыпаний мало, держимся общего правила: первые ~20 минут сон у малышей поверхностный
+  if (on.length < 8) return { d: LIGHT_DEFAULT, n: on.length, rule: true };
+  const at = d => { const risk = on.filter(x => x > d); return { of: risk.length, bad: risk.filter(x => x <= d + len).length }; };
+  for (let d = 10; d <= 90; d += 5) {
+    const r = at(d);
+    if (r.of < 4) break;
+    if (r.bad / r.of <= .2) return { d, n: on.length, ...r };
+  }
+  return { d: 60, n: on.length, unsure: true };
+}
+// Обычный окончательный отбой за 30 дней
+function usualBed() {
+  const beds = recentKid(30).beds;
+  if (beds.length < 3) return null;
+  const one = beds.map(() => 1);
+  return { at: median(beds), lo: wq(beds, one, .25), hi: wq(beds, one, .75) };
+}
+function renderDuoCard() {
+  const card = $("#duo-card"), h = S.data && evHabit();
+  if (!h) { card.hidden = true; return; }
+  const k = bedDateNow(), now = evNow(), name = kidName(), ub = usualBed();
+  const K = kidButtons(), bed = bedOf(k), L = lightSleep(), len = evMinutes(), done = isDone(k, h.id);
+  const from = Math.min(bedFrom(), ub ? ub.lo - 30 : Infinity);
+  card.hidden = !(now >= from && now < 26 * 60);
+  if (card.hidden) return;
+  card.classList.toggle("met", done);
+  if (done) {
+    card.innerHTML = `<span class="pc-ok">${CHECK}</span><div class="pc-t"><b>${esc(h.name)} — сегодня было</b><span>слава Богу за этот вечер</span></div>
+      <button type="button" class="btn sm ghost" data-duo="undo">Отменить</button>`;
+    return;
+  }
+  const late = 23 * 60, short = `Если затянется после ${hm(late)} — короткий вариант: глава и молитва 10 минут.`;
+  let line, sub, ready = false;
+  if (K.resleep) {
+    line = `${name} проснулся в ${hm(K.lastW)} — через ${fmtDur(K.lastW - bed)} после засыпания`;
+    sub = `Когда уснёт снова, нажми «${name} снова уснул» — я пересчитаю, когда начинать.`;
+  } else if (bed == null) {
+    const at = ub ? ub.at + L.d : null;
+    line = at != null ? `Окно вдвоём ≈ ${hm(at)}` : `Начинайте через ${L.d} мин после того, как ${name} уснёт`;
+    sub = ub ? `${name} обычно засыпает ≈ ${hm(ub.at)} (${hm(ub.lo)}–${hm(ub.hi)}), потом ${L.d} мин сон чуткий. ${at >= late ? short : ""}`
+      : `Отмечай «${name} уснул» — по отбоям посчитаю, когда обычно получается.`;
+  } else {
+    const start = bed + L.d, left = start - now;
+    ready = left <= 0;
+    line = ready ? `Можно начинать — ${name} спит уже ${fmtDur(now - bed)}` : `Начинайте в ${hm(start)} — через ${fmtDur(left)}`;
+    sub = ready
+      ? (L.rule ? `Первые ~${L.d} минут сон у малышей поверхностный — они уже прошли.`
+        : L.unsure ? `Он часто просыпается и после часа сна — если проснётся, продолжите, когда уснёт снова.`
+        : L.bad ? `Раньше после такой выдержки он просыпался в ближайшие ${len} мин в ${L.bad} из ${L.of} раз.`
+        : `Раньше после такой выдержки он ни разу не просыпался в ближайшие ${len} мин (${L.of} ${plural(L.of, "раз", "раза", "раз")}).`) + (now >= late ? ` ${short}` : "")
+      : `${name} уснул в ${hm(bed)}, первые ${L.d} мин сон ещё чуткий${L.rule ? "" : " — так было в прошлые вечера"}. ${start >= late ? short : ""}`;
+  }
+  card.innerHTML = `<div class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 5 7 4.6 4 5v13c3-.4 6 0 8 1.5 2-1.5 5-1.9 8-1.5V5c-3-.4-6 0-8 1.5zM12 6.5v13"/></svg></div>
+    <div class="pc-t"><span class="eyebrow">${esc(h.name)}</span><b>${esc(line)}</b><span>${esc(sub.trim())}</span></div>
+    <button type="button" class="btn${ready ? "" : " ghost"}" data-duo="done">Сделали</button>`;
 }
 const bedDateNow = () => { const now = new Date(); return ymd(addDays(todayDate(), now.getHours() < 12 ? -1 : 0)); };
 function countWakes() { return Object.values(S.data?.kid || {}).filter(v => v.wake).length; }
@@ -581,7 +692,7 @@ function render() {
   renderToday(); renderPlan(); renderKid(); renderTogether(); renderWeek(); renderGoals();
   renderProgress(); renderSystem(); renderManage(); renderSettingsPanel();
   renderRitualCard(); renderSlotCard(); renderFocus(); renderBalance(); renderSlotPlan(); renderFocusTime();
-  renderPrayCard(); renderPrayStats(); renderPraySettings(); renderNeeds(); renderRemind();
+  renderPrayCard(); renderDuoCard(); renderPrayStats(); renderPraySettings(); renderNeeds(); renderRemind();
 }
 function renderHeader() {
   const t = todayDate(), tk = ymd(t), v = currentView();
@@ -645,27 +756,46 @@ function renderKid() {
   }
   // Кнопки: видна только та, что имеет смысл сейчас, и ничего не перезаписывает
   const K = kidButtons();
-  $("#kid-wake-l").textContent = `${name} проснулся`;
-  $("#kid-wake-s").textContent = `нажми, когда проснётся${fc && isToday ? ` · прогноз ${hm(fc.pred)}` : ""}`;
-  $("#kid-sleep-l").textContent = `${name} уснул`;
-  $("#kid-sleep-s").textContent = "нажми, когда уснёт на ночь";
-  $("#kid-night-l").textContent = `${name} проснулся ночью`;
-  $("#kid-night-s").textContent = `уснул в ${hm(K.bed)}${K.nights.length ? ` · уже просыпался: ${K.nights.map(x => hm(toMin(x))).join(", ")}` : ""}`;
+  $("#kid-wake-l").textContent = `${name} проснулся на день`;
+  $("#kid-wake-s").textContent = `больше не уснёт${fc && isToday ? ` · прогноз ${hm(fc.pred)}` : ""}`;
+  $("#kid-sleep-l").textContent = K.resleep ? `${name} снова уснул` : `${name} уснул`;
+  $("#kid-sleep-s").textContent = K.resleep ? `проснулся в ${hm(K.lastW)}, через ${fmtDur(K.lastW - K.bed)} после засыпания` : "нажми, когда уснёт на ночь";
+  $("#kid-night-l").textContent = `${name} проснулся ненадолго`;
+  const nx = nextWake();
+  $("#kid-night-s").textContent = `покормить и снова уснёт · ${K.nights.length ? `уже просыпался: ${K.nights.map(x => hm(toMin(x))).join(", ")}` : `уснул в ${hm(K.bed)}`}`
+    + (nx?.at != null ? ` · следующий раз ≈ ${hm(nx.at)}` : "");
+  // Промежуточные пробуждения: пока спит — когда проснётся в следующий раз
+  $("#fc-next").textContent = !nx ? ""
+    : nx.need ? `Прогноз промежуточных пробуждений появится, когда наберётся ещё ${nx.need} ${plural(nx.need, "отрезок", "отрезка", "отрезков")} сна.`
+    : nx.long ? `Спит с ${hm(nx.last)} — дольше, чем обычно длятся отрезки сна.`
+    : nx.morning ? `Спит с ${hm(nx.last)} · следующее пробуждение, скорее всего, уже на день.`
+    : `Спит с ${hm(nx.last)} · следующее пробуждение ≈ ${hm(nx.at)} (${hm(nx.lo)}–${hm(nx.hi)})`;
   const rec = recFor(tk);
   $("#me-wake-l").textContent = "Я встал";
   $("#me-wake-s").textContent = rec != null ? `нажми, когда встанешь · план ${hm(rec)}` : "нажми, когда встанешь";
-  $("#kid-wake").hidden = !K.wake; $("#kid-sleep").hidden = !K.bed0; $("#kid-night").hidden = !K.night; $("#me-wake").hidden = !K.me;
+  $("#kid-wake").hidden = !K.wake; $("#kid-sleep").hidden = !K.bed0 && !K.resleep; $("#kid-night").hidden = !K.night; $("#me-wake").hidden = !K.me;
   [$("#kid-wake"), $("#kid-sleep"), $("#kid-night"), $("#me-wake")].forEach(el => { el.disabled = !canWrite(); });
   // Уже отмеченное — плашками; нажатие открывает редактор этой ночи
   const chip = (color, text) => `<button type="button" class="chip-done" data-fix="${K.night0}"><i style="background:${color}"></i>${esc(text)}</button>`;
   const chips = [];
-  if (K.bedDone != null) chips.push(chip("var(--blue)", `уснул в ${hm(K.bedDone)}`));
-  if (K.nightsDone.length) chips.push(chip("var(--violet)", `ночью: ${K.nightsDone.map(x => hm(toMin(x))).join(", ")}`));
+  const tries0 = S.data.kid[K.night0]?.tries?.length || 0;
+  if (K.bedDone != null) chips.push(chip("var(--blue)", `уснул в ${hm(K.bedDone)}${tries0 ? ` · с ${tries0 + 1}-го раза` : ""}`));
+  if (K.nightsDone.length) chips.push(chip("var(--violet)", `просыпался: ${K.nightsDone.map(x => hm(toMin(x))).join(", ")}`));
   if (K.wakeDone != null) chips.push(chip("var(--amber)", `проснулся в ${hm(K.wakeDone)}`));
   if (K.meDone != null) chips.push(chip("var(--teal)", `ты встал в ${hm(K.meDone)}`));
   if (chips.length) chips.push(`<button type="button" class="chip-done fix" data-fix="${K.night0}">Исправить</button>`);
   else if (!K.wake && !K.bed0 && !K.night && !K.me) chips.push(`<span class="chip-note">Кнопка «${esc(name)} уснул» появится в ${hm(bedFrom())}.</span>`);
   $("#kid-done").innerHTML = chips.join("");
+  // Если уже встал — вместо плана показываем, когда встал
+  const meW = meWakeOf(tk), up = isToday && meW != null;
+  $("#fc-me").classList.toggle("done", up);
+  $("#fc-me-l").textContent = up ? "Ты встал" : isToday ? "Твой подъём" : `Твой подъём · завтра`;
+  if (up) {
+    const recT = recFor(tk), left = fc ? fc.pred - nowMin() : null;
+    $("#fc-alarm").textContent = hm(meW);
+    $("#fc-plan").textContent = [recT != null ? `План был ${hm(recT)} — ${diffText(meW - recT)}.` : "",
+      left != null && left > 0 ? `До ожидаемого подъёма ${kidGen()} ещё ≈ ${fmtDur(left)}.` : ""].filter(Boolean).join(" ");
+  }
   $("#lg-kid-wake").textContent = `${name} проснулся`;
   $("#lg-kid").textContent = `подъём ${kidGen()}`;
   renderKidCal(fc, target);
@@ -722,7 +852,7 @@ function renderKidCal(fc, target) {
     s += row("подъём", d => { const v = wakeOf(ymd(d)); return v != null ? hm(v) : null; }, "w");
     s += row("ты", d => { const v = meWakeOf(ymd(d)); return v != null ? hm(v) : null; }, "me");
     s += row("отбой", d => { const v = bedOf(ymd(addDays(d, -1))); return v != null ? hm(v) : null; });
-    s += row("ночью", d => { const n = S.data.kid[ymd(addDays(d, -1))]?.nights?.length; return n ? String(n) : null; });
+    s += row("просып.", d => { const n = S.data.kid[ymd(addDays(d, -1))]?.nights?.length; return n ? String(n) : null; });
   }
   box.innerHTML = s + "</div>";
 }
@@ -791,6 +921,10 @@ function renderInsights() {
     if (y.length >= 3 && n.length >= 3)
       out.push(`Когда встаёшь по плану, «${mh.name}» получается в ${pct(y.filter(Boolean).length / y.length)} дней, а когда позже — в ${pct(n.filter(Boolean).length / n.length)}.`);
   }
+  const on = onsets(), fs = on.filter(x => x <= 60);
+  if (on.length >= 5) out.push(fs.length
+    ? `Ложные засыпания: в ${fs.length} из ${on.length} раз ${name} просыпался в первый час после засыпания, обычно через ${Math.round(median(fs))} мин. Начинать вдвоём спокойнее через ${lightSleep().d} мин после засыпания.`
+    : `${name} ни разу не просыпался в первый час после засыпания — можно начинать вдвоём почти сразу, как уснёт.`);
   $("#kid-insights").innerHTML = out.map(x => `<li>${esc(x)}</li>`).join("");
 }
 function renderKidCharts() {
@@ -831,6 +965,9 @@ function renderKidSettings() {
   if ($("#ks-min") !== focus) $("#ks-min").innerHTML = [10, 15, 20, 30, 45, 60, 90].map(n => `<option value="${n}" ${n === (st.morningMinutes || 30) ? "selected" : ""}>${n} мин</option>`).join("");
   if ($("#ks-habit") !== focus) $("#ks-habit").innerHTML = `<option value="">не выбрана</option>` +
     active().map(h => `<option value="${esc(h.id)}" ${h.id === st.morningHabit ? "selected" : ""}>${esc(h.name)}</option>`).join("");
+  if ($("#ks-evhabit") !== focus) $("#ks-evhabit").innerHTML = `<option value="">не выбрана</option>` +
+    active().map(h => `<option value="${esc(h.id)}" ${h.id === st.eveningHabit ? "selected" : ""}>${esc(h.name)}</option>`).join("");
+  if ($("#ks-evmin") !== focus) $("#ks-evmin").innerHTML = [10, 15, 20, 30, 45, 60].map(n => `<option value="${n}" ${n === evMinutes() ? "selected" : ""}>${n} мин</option>`).join("");
   if (!$("#kf-date").value) fillKidForm(kidButtons().night0);
   else if (!$("#kid-form").contains(document.activeElement)) renderNightList();
 }
@@ -841,7 +978,8 @@ function renderNightList() {
     const d = addDays(t, -i), k = ymd(d), next = ymd(addDays(d, 1)), v = S.data.kid[k] || {};
     const w = wakeOf(next), me = meWakeOf(next), n = v.nights || [];
     const parts = [v.bed ? `уснул ${hm(toMin(v.bed))}` : "отбой —",
-      n.length ? `ночью ${n.map(x => hm(toMin(x))).join(", ")}` : "",
+      (v.tries || []).length ? `ложно засыпал: ${v.tries.map(x => `${hm(toMin(x.s))}→${hm(toMin(x.w))}`).join(", ")}` : "",
+      n.length ? `просыпался ${n.map(x => hm(toMin(x))).join(", ")}` : "",
       w != null ? `проснулся ${hm(w)}` : next <= ymd(t) ? "подъём —" : "", me != null ? `ты ${hm(me)}` : ""].filter(Boolean);
     rows.push(`<li><button type="button" class="night-row" data-night="${k}" aria-current="${k === sel}"><b>с ${fmtShort.format(d)} на ${fmtShort.format(addDays(d, 1))}</b><span>${esc(parts.join(" · "))}</span></button></li>`);
   }
@@ -1161,6 +1299,11 @@ function renderPlan() {
   else if (beds.length >= 3) {
     const one = beds.map(() => 1);
     add(median(beds), `≈ ${hm(median(beds))}`, "kid", `Отбой ${kidGen()}`, `обычно ${hm(wq(beds, one, .25))}–${hm(wq(beds, one, .75))}`);
+  }
+  const eh = evHabit(), ub = usualBed();
+  if (eh && !isDone(k, eh.id) && (bedDay != null || ub)) {
+    const L = lightSleep(), base = bedDay ?? ub.at;
+    add(base + L.d, `≈ ${hm(base + L.d)}`, "duo", "Молитва и чтение вдвоём", bedDay != null ? `через ${L.d} мин после того, как ${name} уснул` : `если ${name} уснёт ≈ ${hm(base)}`);
   }
   slotsOn(d).forEach(x => {
     const ss = sess(sKey(k, x.from)), stx = { done: " · сделано", started: " · идёт", skipped: " · пропущен", moved: " · перенесён" }[ss?.status] || "";
@@ -1521,11 +1664,17 @@ function kidMark(kind) {
   if (!canWrite()) { openConnect(); return; }
   const now = nowHM(), t = hm(toMin(now)), name = kidName(), hr = new Date().getHours(), tk = ymd(todayDate());
   const K = kidButtons();
-  if ((kind === "wake" && !K.wake) || (kind === "bed" && !K.bed0) || (kind === "night" && !K.night) || (kind === "me" && !K.me)) return;
+  if ((kind === "wake" && !K.wake) || (kind === "bed" && !K.bed0 && !K.resleep) || (kind === "night" && !K.night) || (kind === "me" && !K.me)) return;
   if (kind === "wake") {
     const prev = S.data.kid[tk]?.wake ?? null;
     op({ t: "kid", date: tk, data: { wake: now } });
     toast(`${name} проснулся в ${t}`, () => op({ t: "kid", date: tk, data: { wake: prev } }));
+  } else if (kind === "bed" && K.resleep) {
+    // Ложное засыпание: прошлый отбой и пробуждение уходят в tries, отбоем становится новое засыпание
+    const date = bedDateNow(), v = S.data.kid[date] || {}, prevN = v.nights || [], prevT = v.tries || [];
+    const w = prevN.find(x => bedMinOf(x) === K.lastW), nights = prevN.filter(x => x !== w);
+    op({ t: "kid", date, data: { bed: now, tries: [...prevT, { s: v.bed, w }], nights: nights.length ? nights : null } });
+    toast(`${name} снова уснул в ${t}`, () => op({ t: "kid", date, data: { bed: v.bed, tries: prevT.length ? prevT : null, nights: prevN.length ? prevN : null } }));
   } else if (kind === "bed") {
     const date = bedDateNow(), prev = S.data.kid[date]?.bed ?? null;
     op({ t: "kid", date, data: { bed: now } });
@@ -1533,7 +1682,7 @@ function kidMark(kind) {
   } else if (kind === "night") {
     const date = bedDateNow(), prev = S.data.kid[date]?.nights || [];
     op({ t: "kid", date, data: { nights: [...prev, now] } });
-    toast(`${name} проснулся ночью в ${t}`, () => op({ t: "kid", date, data: { nights: prev.length ? prev : null } }));
+    toast(`${name} проснулся в ${t} — ненадолго`, () => op({ t: "kid", date, data: { nights: prev.length ? prev : null } }));
   } else if (kind === "me") {
     const prev = S.data.me[tk]?.wake ?? null, rec = recFor(tk);
     op({ t: "me", date: tk, data: { wake: now } });
@@ -1552,7 +1701,7 @@ $("#kid-form").addEventListener("submit", e => {
   const k = $("#kf-date").value;
   if (!k || k > ymd(todayDate())) { notice("Выбери сегодняшний или прошедший день."); return; }
   const raw = $("#kf-nights").value.trim(), nights = raw ? raw.split(/[,;\s]+/).filter(Boolean) : [];
-  if (nights.some(x => !/^\d{1,2}:\d{2}$/.test(x) || toMin(x) >= 1440)) { notice("Ночные пробуждения пиши временем через запятую, например 23:40, 2:10."); return; }
+  if (nights.some(x => !/^\d{1,2}:\d{2}$/.test(x) || toMin(x) >= 1440)) { notice("Пробуждения пиши временем через запятую, например 23:40, 2:10."); return; }
   const norm = nights.map(x => { const m = toMin(x); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; });
   const next = ymd(addDays(parse(k), 1)), ops = [{ t: "kid", date: k, data: { bed: $("#kf-bed").value || null, nights: norm.length ? norm : null } }];
   if (next <= ymd(todayDate())) ops.push({ t: "kid", date: next, data: { wake: $("#kf-wake").value || null } }, { t: "me", date: next, data: { wake: $("#kf-me").value || null } });
@@ -1562,13 +1711,23 @@ $("#kf-clear").addEventListener("click", () => {
   const k = $("#kf-date").value;
   if (!k) return;
   const next = ymd(addDays(parse(k), 1));
-  if (op({ t: "kid", date: k, data: { bed: null, nights: null } }, { t: "kid", date: next, data: { wake: null } }, { t: "me", date: next, data: { wake: null } })) fillKidForm(k);
+  if (op({ t: "kid", date: k, data: { bed: null, nights: null, tries: null } }, { t: "kid", date: next, data: { wake: null } }, { t: "me", date: next, data: { wake: null } })) fillKidForm(k);
 });
 const setSetting = data => op({ t: "settings", data });
 $("#ks-name").addEventListener("change", e => setSetting({ kidName: e.target.value.trim() }));
 $("#ks-gen").addEventListener("change", e => setSetting({ kidNameGen: e.target.value.trim() }));
 $("#ks-min").addEventListener("change", e => setSetting({ morningMinutes: Number(e.target.value) }));
 $("#ks-habit").addEventListener("change", e => setSetting({ morningHabit: e.target.value }));
+$("#ks-evhabit").addEventListener("change", e => setSetting({ eveningHabit: e.target.value }));
+$("#ks-evmin").addEventListener("change", e => setSetting({ eveningMinutes: Number(e.target.value) }));
+$("#duo-card").addEventListener("click", e => {
+  const b = e.target.closest("[data-duo]"), h = evHabit();
+  if (!b || !h) return;
+  if (!canWrite()) { openConnect(); return; }
+  const k = bedDateNow(), val = b.dataset.duo === "done";
+  op({ t: "check", date: k, hid: h.id, val });
+  if (val) toast(`«${h.name}» отмечено`, () => op({ t: "check", date: k, hid: h.id, val: false }));
+});
 $("#ks-bedfrom").addEventListener("change", e => { if (e.target.value) setSetting({ bedFrom: e.target.value }); });
 $("#kc-prev").addEventListener("click", () => { S.kidOffset--; renderKid(); });
 $("#kc-next").addEventListener("click", () => { if (S.kidOffset < 0) { S.kidOffset++; renderKid(); } });
@@ -2851,7 +3010,7 @@ setInterval(() => {
   // Раз в минуту: смена дня и полдень (после 12:00 прогноз переключается на завтра)
   const now = new Date(), key = ymd(todayDate()) + (now.getHours() < 12 ? "am" : "pm");
   if (key !== lastKey) { lastKey = key; S.memo = null; render(); }
-  else if (S.data) { renderKid(); renderPlan(); renderSlotCard(); renderRitualCard(); renderNow(); }
+  else if (S.data) { renderKid(); renderPlan(); renderSlotCard(); renderRitualCard(); renderDuoCard(); renderNow(); }
 }, 60000);
 let lastW = innerWidth;
 addEventListener("resize", () => {

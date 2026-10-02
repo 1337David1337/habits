@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=32">
 </head>
 <body>
 <aside class="side" aria-label="Разделы">
@@ -73,6 +73,7 @@
       </section>
 
       <section class="card span2 pray-card" id="pray-card" hidden></section>
+      <section class="card span2 pray-card duo-card" id="duo-card" hidden></section>
       <section class="card span2 ritual" id="ritual-card" hidden></section>
       <section class="card span2 slot-card" id="slot-card" hidden></section>
 
@@ -117,9 +118,10 @@
             <span class="eyebrow" id="fc-when">Прогноз</span>
             <div class="fc-big" id="fc-time">—</div>
             <p id="fc-range"></p>
+            <p class="fc-next" id="fc-next"></p>
           </div>
-          <div class="fc-box me">
-            <span class="eyebrow">Твой подъём</span>
+          <div class="fc-box me" id="fc-me">
+            <span class="eyebrow" id="fc-me-l">Твой подъём</span>
             <div class="fc-big" id="fc-alarm">—</div>
             <p id="fc-plan"></p>
           </div>
@@ -425,13 +427,13 @@
             <label for="kf-date">Ночь с <input class="field" type="date" id="kf-date"></label>
             <p class="kf-hint" id="kf-hint"></p>
             <label for="kf-bed">Уснул вечером <input class="field" type="time" id="kf-bed"></label>
-            <label for="kf-nights">Ночью просыпался <input class="field" type="text" id="kf-nights" placeholder="23:40, 2:10" inputmode="numeric"></label>
-            <label for="kf-wake">Проснулся утром <input class="field" type="time" id="kf-wake"></label>
+            <label for="kf-nights">Просыпался ненадолго <input class="field" type="text" id="kf-nights" placeholder="23:40, 2:10" inputmode="numeric"></label>
+            <label for="kf-wake">Проснулся на день <input class="field" type="time" id="kf-wake"></label>
             <label for="kf-me">Я встал утром <input class="field" type="time" id="kf-me"></label>
             <button class="btn" type="submit" id="kf-save">Сохранить</button>
             <button class="btn ghost" type="button" id="kf-clear">Очистить ночь</button>
           </form>
-          <p class="note">Пустое поле удаляет запись. Ночные пробуждения — через запятую.</p>
+          <p class="note">Пустое поле удаляет запись. Пробуждения, после которых снова уснул, — через запятую.</p>
           <h3 class="h3 top">Другие ночи</h3>
           <ul class="nights" id="night-list"></ul>
           <h3 class="h3 top">Утро</h3>
@@ -441,6 +443,12 @@
             <label for="ks-min">Время на утро <select class="field" id="ks-min"></select></label>
             <label for="ks-habit">Утренняя привычка <select class="field" id="ks-habit"></select></label>
             <label for="ks-bedfrom">Кнопка «уснул» с <input class="field" type="time" id="ks-bedfrom"></label>
+          </div>
+          <h3 class="h3 top">Вечер вдвоём</h3>
+          <p class="note">Карточка вечером подскажет, когда начинать: после засыпания ждём, пока сон станет крепким. Если уснул и сразу проснулся — нажми «проснулся ненадолго», потом «снова уснул», так станет точнее.</p>
+          <div class="fgrid">
+            <label for="ks-evhabit">Вечерняя привычка <select class="field" id="ks-evhabit"></select></label>
+            <label for="ks-evmin">Сколько длится <select class="field" id="ks-evmin"></select></label>
           </div>
         </details>
       </section>
@@ -566,6 +574,6 @@
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="tip" id="tip" hidden></div>
 <script src="demo-data.js?v=1"></script>
-<script src="app.js?v=34"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>
