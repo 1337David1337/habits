@@ -753,6 +753,7 @@ ul.bal-list { list-style:none; margin:0; padding:0; display:grid; }
 .bal-h { margin:0 0 10px; font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
 .bal-h small { font-size:12.5px; font-weight:500; color:var(--faint); }
 .bal-sub .bal-rec { gap:10px; }
+.bal-h2 { margin:2px 0 -2px; font-size:15px; font-weight:600; }
 
 /* ---------- лента дня: свёрнута до «дальше…» ---------- */
 .tl-next { margin:0; font-size:14.5px; color:var(--ink); line-height:1.45; }

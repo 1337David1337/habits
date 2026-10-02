@@ -2279,7 +2279,8 @@ function renderBalance() {
   const tgt = planTarget(), tgtK = ymd(tgt), tk = ymd(todayDate()), isT = tgtK === tk, rows = balance(tgtK), st = settings();
   const chosen = (S.data.focus[tgtK] || []).length;
   // До полудня предложения идут в главное на сегодня (прямо в список выше), после — на завтра
-  $("#bal-title").innerHTML = `Упор на ${isT ? "сегодня" : "завтра"}<small>${isT ? "сферы, которым пора" : `выбрано на завтра ${chosen} из 3`}</small>`;
+  // Полоски — баланс недели по всем сферам; ниже отдельно — только те, кому пора уделить время
+  $("#bal-title").innerHTML = `Баланс недели<small>${isT ? "зелёный — норма есть" : `на завтра выбрано ${chosen} из 3`}</small>`;
   // три дела на сегодня выбраны — заряд сфер остаётся, предложения прячем
   $("#bal-rec").hidden = isT && chosen >= 3;
   $("#bal-batts").innerHTML = rows.filter(r => !r.onDemand).map(r => { const p = pctOf(r);
@@ -2290,7 +2291,7 @@ function renderBalance() {
   S.balIdeas = [];
   S.balAlt ||= {};
   $("#bal-rec").innerHTML = recs.length
-    ? (busy ? `<p class="note" style="margin:0">${isT ? "Сегодня" : "Завтра"} вечер — ${esc(st.busyLabel)}, поэтому одно короткое дело.</p>` : "")
+    ? `<p class="bal-h2">Пора уделить время ${isT ? "сегодня" : "завтра"}</p>` + (busy ? `<p class="note" style="margin:0">${isT ? "Сегодня" : "Завтра"} вечер — ${esc(st.busyLabel)}, поэтому одно короткое дело.</p>` : "")
       + recs.map(r => {
         const j = (S.balAlt[r.s] || 0) % r.ideas.length, x = r.ideas[j], i = S.balIdeas.push({ ...x, s: r.s }) - 1, on = inFocus(x);
         return `<div class="pick"><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "late-t" : ""}">${agoText(r)}${r.onDemand ? "" : ` · ${r.touched} из ${r.norm}`}</span>
@@ -2484,7 +2485,7 @@ function wizFocus() {
   const has = c => f.some(x => (c.taskId && x.taskId === c.taskId) || x.t === c.t);
   const cands = [];
   balanceRecs(tgt, balance(tgt)).forEach(r => [r.ideas[(S.balAlt?.[r.s] || 0) % r.ideas.length]].forEach(x =>
-    cands.push({ t: x.t, src: focusSrc(x, r.s), note: `${FROM[x.from]} · ${r.s}${x.taskId && parentOf(taskIndex().byId.get(x.taskId) || {}) ? ` › ${parentOf(taskIndex().byId.get(x.taskId)).title}` : ""} · ${agoText(r)}`, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, stepId: x.stepId || null, habit: x.habit || null, kind: "Упор — сферы, которые давно без внимания" })));
+    cands.push({ t: x.t, src: focusSrc(x, r.s), note: `${FROM[x.from]} · ${r.s}${x.taskId && parentOf(taskIndex().byId.get(x.taskId) || {}) ? ` › ${parentOf(taskIndex().byId.get(x.taskId)).title}` : ""} · ${agoText(r)}`, taskId: x.taskId || null, listId: x.listId || null, goal: x.goal || null, stepId: x.stepId || null, habit: x.habit || null, kind: "Пора уделить время — сферы, которые давно без внимания" })));
   stepCatalog().forEach(c => cands.push({ t: c.text, src: c.gt, goal: c.goal, stepId: c.stepId || null, kind: "Шаги целей" }));
   if (T.data) {
     const pr = x => { const d = effDue(x); return !d ? 3 : d < tgt ? 0 : d === tgt ? 1 : 2; };
