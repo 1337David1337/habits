@@ -186,3 +186,12 @@ test("баланс: сфера «по делу» без дел не подсве
   await page.goto("/#plan");
   await expect(page.locator("#bl-list li.od", { hasText: "здоровье" })).toContainText("без ритма");
 });
+
+test("лента дня: работа, которая идёт сейчас, — под «сейчас», а не в прошлом", async ({ page }) => {
+  await open(page, { time: "10:00" });
+  await expect(page.locator("#day-next")).toContainText("Сейчас: Работа до 17:30");
+  const items = await page.locator("#day-tl li").allInnerTexts();
+  const now = items.findIndex(t => t.includes("сейчас")), work = items.findIndex(t => t.includes("Работа"));
+  expect(work).toBe(now + 1);
+  await expect(page.locator("#day-tl li.cur")).toContainText("идёт · до 17:30, ещё 7 ч 30 мин");
+});

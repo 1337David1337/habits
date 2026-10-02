@@ -182,6 +182,8 @@ ol.steps code { font-family:ui-monospace,Menlo,monospace; font-size:13px; backgr
 .tl .done b { color:var(--faint); font-weight:500; }
 .tl .done::before { opacity:.55; }
 .tl .now { padding:0; }
+.tl .cur > div { background:var(--field); border-radius:12px; padding:7px 10px; margin:-7px 0 -3px -10px; }
+.tl .cur b { font-weight:600; }
 .tl .now::before { background:var(--warn); width:10px; height:10px; left:79px; top:4px; }
 .tl .now time { color:var(--warn); font-size:12px; }
 .tl .now > span { color:var(--warn); font-size:12px; font-weight:600; padding-top:1px; }

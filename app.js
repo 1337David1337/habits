@@ -1287,15 +1287,15 @@ function renderPlan() {
   const off = dayOffset(), d = addDays(todayDate(), off), k = ymd(d), isToday = off === 0, st = settings(), name = kidName();
   document.querySelectorAll("#day .seg button").forEach(b => b.setAttribute("aria-selected", String(Number(b.dataset.day) === off)));
   $("#day-title").textContent = isToday ? "День" : "Завтра";
-  const ev = [], add = (t, time, cls, b, sub = "") => ev.push({ t, time, cls, b, sub });
+  const ev = [], add = (t, time, cls, b, sub = "", end = null) => ev.push({ t, time, cls, b, sub, end });
   const mw = meWakeOf(k), rec = recFor(k), mh = habits().find(h => h.id === st.morningHabit), mins = st.morningMinutes || 30;
   if (mw != null) add(mw, hm(mw), "me done", "Ты встал", rec != null ? diffText(mw - rec) : "");
   else if (rec != null) add(rec, hm(rec), "me", "Ты встаёшь", `${mins} мин на ${mh ? `«${mh.name}»` : "утреннее время"}`);
   const kw = wakeOf(k), f = forecast(k);
   if (kw != null) add(kw, hm(kw), "kid done", `${name} проснулся`, f ? `прогноз был ${hm(f.pred)}` : "");
-  else if (f) add(f.lo, `${hm(f.lo)}–${hm(f.hi)}`, "kid band", `${name} проснётся ≈ ${hm(f.pred)}`, "прогноз по прошлым утрам");
+  else if (f) add(f.lo, `${hm(f.lo)}–${hm(f.hi)}`, "kid band", `${name} проснётся ≈ ${hm(f.pred)}`, "прогноз по прошлым утрам", f.hi);
   const w = st.work;
-  if (w && w.from && w.to && (w.days || []).includes(dow(d))) add(toMin(w.from), `${hz(w.from)}–${hz(w.to)}`, "work", "Работа");
+  if (w && w.from && w.to && (w.days || []).includes(dow(d))) add(toMin(w.from), `${hz(w.from)}–${hz(w.to)}`, "work", "Работа", "", toMin(w.to));
   if ((st.busyDays || []).includes(dow(d)) && st.busyLabel) add(18 * 60 + 30, "вечер", "busy", st.busyLabel[0].toUpperCase() + st.busyLabel.slice(1));
   const bedDay = bedOf(k), beds = recentKid(30).beds;
   if (bedDay != null) add(bedDay, hm(bedDay), "kid done", `${name} уснул`);
@@ -1310,17 +1310,28 @@ function renderPlan() {
   }
   slotsOn(d).forEach(x => {
     const ss = sess(sKey(k, x.from)), stx = { done: " · сделано", started: " · идёт", skipped: " · пропущен", moved: " · перенесён" }[ss?.status] || "";
-    add(toMin(x.from), `${hz(x.from)}–${hz(x.to)}`, "slot" + (ss?.status === "done" ? " done" : ""), "Свободный слот", ss?.text ? `${ss.text}${stx}` : "шаг не выбран");
+    add(toMin(x.from), `${hz(x.from)}–${hz(x.to)}`, "slot" + (ss?.status === "done" ? " done" : ""), "Свободный слот", ss?.text ? `${ss.text}${stx}` : "шаг не выбран", toMin(x.to));
   });
   (S.data.prayer[k] || []).forEach(x => add(toMin(x.s), hm(toMin(x.s)), "pr done", "Молитва", fmtDur(x.m)));
   const pr = prRun();
   if (pr && pr.date === k) add(toMin(pr.s), hm(toMin(pr.s)), "pr", pr.paused ? "Молитва на паузе" : "Молитва идёт", mmss(prElapsed(pr)));
-  if (isToday) { const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); ev.push({ t: m + .5, now: true, time: hm(m) }); }
+  if (isToday) {
+    const m = nowMin();
+    ev.push({ t: m + .5, now: true, time: hm(m) });
+    // То, что идёт прямо сейчас (работа, слот), встаёт сразу под «сейчас», а не остаётся в прошлом по времени начала
+    ev.forEach(e => {
+      if (e.end == null || /done/.test(e.cls) || !(e.t <= m && m < e.end)) return;
+      e.t = m + .6; e.cls += " cur"; e.cur = true;
+      if (!/band/.test(e.cls)) e.sub = [`идёт · до ${hm(e.end)}, ещё ${fmtDur(e.end - m)}`, e.sub].filter(Boolean).join(" · ");
+    });
+  }
   ev.sort((x, y) => x.t - y.t);
-  const nowT = isToday ? ev.find(e => e.now).t : -1, ahead = ev.filter(e => !e.now && e.t >= nowT && !/done/.test(e.cls)).slice(0, 2);
-  $("#day-next").innerHTML = ahead.length
+  const nowT = isToday ? ev.find(e => e.now).t : -1, cur = ev.filter(e => e.cur);
+  const ahead = ev.filter(e => !e.now && !e.cur && e.t >= nowT && !/done/.test(e.cls)).slice(0, cur.length ? 1 : 2);
+  const curTxt = cur.length ? `<span>Сейчас:</span> ${cur.map(e => `<b>${esc(e.b)}</b> до ${hm(e.end)}`).join(" · ")}` : "";
+  $("#day-next").innerHTML = [curTxt, ahead.length
     ? `<span>${isToday ? "Дальше" : "Завтра"}:</span> ${ahead.map(e => `<b>${esc(e.time)}</b> ${esc(e.b)}`).join(" · ")}`
-    : `<span>${isToday ? "На сегодня в ленте больше ничего" : "На завтра в ленте пусто"}</span>`;
+    : cur.length ? "" : `<span>${isToday ? "На сегодня в ленте больше ничего" : "На завтра в ленте пусто"}</span>`].filter(Boolean).join("<br>");
   $("#day").classList.toggle("open", !!S.dayOpen);
   $("#day-toggle").textContent = S.dayOpen ? "Свернуть" : "Показать весь день";
   $("#day-toggle").setAttribute("aria-expanded", String(!!S.dayOpen));
