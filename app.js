@@ -2186,19 +2186,21 @@ function sphereActivity(from, to) {
   (T.data?.tasks || []).forEach(x => { if (x.status === "completed" && x.completed) put(taskSphere(x), ymd(new Date(x.completed)), x.title); });
   return act;
 }
-// Норма внимания — сколько дней в неделю сфере нужно время; своя норма хранится в settings.sphereNorms
-const NORM_DEFAULT = { "жена": 5, "ребенок": 6, "семья": 5, "церковь": 3, "работа": 3, "деньги": 3, "здоровье": 3, "дом": 1 };
+// Норма внимания — сколько дней в неделю сфере нужно время; своя норма хранится в settings.sphereNorms.
+// 0 — сфера «по делу»: ей не нужно время по ритму (здоровье, когда никто не болеет; дом, когда ничего не сломалось),
+// она без заряда и попадает в «Упор» только при настоящем деле — задаче со сроком или шаге цели
+const NORM_DEFAULT = { "жена": 5, "ребенок": 6, "семья": 5, "церковь": 3, "работа": 3, "деньги": 3, "здоровье": 0, "дом": 0 };
 const normOf = s => settings().sphereNorms?.[s] ?? NORM_DEFAULT[canonOf(s)] ?? 2;
 function balance(tgtK) {
   const tk = ymd(todayDate()), act = sphereActivity(addDaysK(tk, -29), tk);
   const week = Array.from({ length: 7 }, (_, i) => addDaysK(tk, i - 6));
   return (settings().spheres || []).map(s => {
     const days = act[s], keys = Object.keys(days).sort(), last = keys[keys.length - 1] || null;
-    const norm = normOf(s), gap = Math.ceil(7 / norm), touched = week.filter(k => days[k]).length;
+    const norm = normOf(s), gap = norm ? Math.ceil(7 / norm) : Infinity, touched = week.filter(k => days[k]).length;
     const ago = last ? Math.round((parse(tgtK) - parse(last)) / 864e5) : null;
     // пора — по норме сфере уже нужно время; отстаёт — пропущено два своих промежутка подряд
-    return { s, days, week: week.map(k => ({ k, what: days[k] || null })), touched, last, ago, norm, gap,
-      due: ago == null || ago >= gap, late: ago == null || ago >= gap * 2, deficit: Math.max(0, norm - touched) };
+    return { s, days, week: week.map(k => ({ k, what: days[k] || null })), touched, last, ago, norm, gap, onDemand: !norm,
+      due: !!norm && (ago == null || ago >= gap), late: !!norm && (ago == null || ago >= gap * 2), deficit: Math.max(0, norm - touched) };
   });
 }
 function sphereIdeas(s, tgtK) {
@@ -2214,7 +2216,7 @@ function sphereIdeas(s, tgtK) {
     T.data.tasks.filter(x => actionable(x) && !parked(x) && taskSphere(x) === s && (!effDue(x) || effDue(x) <= addDaysK(tgtK, 7)))
       .sort((a, b) => pr(a) - pr(b) || ((effDue(a) || "") < (effDue(b) || "") ? -1 : (effDue(a) || "") > (effDue(b) || "") ? 1 : byPos(a, b)))
       .filter(x => { const r = x.parent || x.id; return !roots.has(r) && roots.add(r); }).slice(0, 3)
-      .forEach(x => out.push({ t: x.title, from: "task", src: taskSrc(x), taskId: x.id, listId: x.listId }));
+      .forEach(x => out.push({ t: x.title, from: "task", src: taskSrc(x), taskId: x.id, listId: x.listId, due: effDue(x) }));
   }
   goalsActive().filter(g => g.sphere === s).forEach(g => { const nx = nextStepOf(g); if (nx && !has(nx.text)) out.push({ t: nx.text, from: "goal", src: `«${g.title}»`, goal: g.id, stepId: nx.stepId || null }); });
   active().filter(h => h.sphere === s).forEach(h => {
@@ -2244,22 +2246,27 @@ function balanceRecs(tgtK, rows) {
   const st = settings(), d = parse(tgtK), busy = (st.busyDays || []).includes(dow(d));
   const busyS = (st.spheres || []).find(s => normRu(s) === normRu(st.busyLabel)) || null;
   const free = slotsOn(d).length > 0 || !(st.work?.days || []).includes(dow(d));
-  const n = busy ? 1 : free ? 3 : 2, need = r => (r.ago ?? 30) / r.gap;
-  return rows.filter(r => r.due && !(busy && r.s === busyS))
-    .sort((a, b) => need(b) - need(a) || b.deficit - a.deficit).slice(0, n).map(r => ({ ...r, ideas: sphereIdeas(r.s, tgtK) }));
+  // Сфера «по делу» — только с делом, которое нельзя отложить: срок подошёл или есть шаг цели
+  const real = x => (x.from === "task" && x.due && x.due <= tgtK) || x.from === "goal";
+  const n = busy ? 1 : free ? 3 : 2, need = r => r.onDemand ? (r.ideas.some(x => x.due && x.due < tgtK) ? 2 : 1.2) : (r.ago ?? 30) / r.gap;
+  return rows.filter(r => !(busy && r.s === busyS))
+    .map(r => r.onDemand ? { ...r, ideas: sphereIdeas(r.s, tgtK).filter(real) } : r)
+    .filter(r => r.onDemand ? r.ideas.length : r.due)
+    .sort((a, b) => need(b) - need(a) || b.deficit - a.deficit).slice(0, n).map(r => r.ideas ? r : { ...r, ideas: sphereIdeas(r.s, tgtK) });
 }
 function agoText(r) {
   const tk = ymd(todayDate());
+  if (r.onDemand) return r.ideas?.some(x => x.due && x.due < tk) ? "по делу · есть просроченное" : "по делу · подошёл срок";
   if (!r.last) return "давно не было";
   const n = Math.round((parse(tk) - parse(r.last)) / 864e5);
   return n === 0 ? "сегодня было" : n === 1 ? "было вчера" : `${n} ${plural(n, "день", "дня", "дней")} без внимания`;
 }
 // Заряд сферы: дни с вниманием за 7 дней от нормы. Больше 100% — сфере достаётся больше нормы
-const pctOf = r => Math.round(r.touched / r.norm * 100);
+const pctOf = r => r.norm ? Math.round(r.touched / r.norm * 100) : null;
 const battCls = p => p < 50 ? "low" : p < 100 ? "mid" : p <= 150 ? "full" : "over";
 const batt = r => { const p = pctOf(r); return `<span class="batt ${battCls(p)}" aria-hidden="true"><i style="width:${Math.min(100, p)}%"></i></span>`; };
 function skewText(rows) {
-  const over = rows.filter(r => r.touched >= 4 && r.touched > r.norm), under = rows.filter(r => r.late && r.touched / r.norm < .5);
+  const over = rows.filter(r => !r.onDemand && r.touched >= 4 && r.touched > r.norm), under = rows.filter(r => r.late && r.touched / r.norm < .5);
   const names = l => l.length > 3 ? `${l.slice(0, 3).map(r => `«${esc(r.s)}»`).join(", ")} и ещё ${l.length - 3}` : l.map(r => `«${esc(r.s)}»`).join(", ").replace(/, ([^,]*)$/, " и $1");
   under.sort((a, b) => a.touched / a.norm - b.touched / b.norm || b.norm - a.norm);
   if (over.length && under.length) return `Перекос: ${names(over)} — выше нормы, а ${names(under)} почти без внимания.`;
@@ -2275,7 +2282,7 @@ function renderBalance() {
   $("#bal-title").innerHTML = `Упор на ${isT ? "сегодня" : "завтра"}<small>${isT ? "сферы, которым пора" : `выбрано на завтра ${chosen} из 3`}</small>`;
   // три дела на сегодня выбраны — заряд сфер остаётся, предложения прячем
   $("#bal-rec").hidden = isT && chosen >= 3;
-  $("#bal-batts").innerHTML = rows.map(r => { const p = pctOf(r);
+  $("#bal-batts").innerHTML = rows.filter(r => !r.onDemand).map(r => { const p = pctOf(r);
     return `<div class="bt ${battCls(p)}" role="img" aria-label="${esc(r.s)}: заряд ${p}%, ${r.touched} из ${r.norm} дней"><span class="bt-n">${esc(r.s)}</span><span class="bt-r">${batt(r)}<b>${p}%</b></span></div>`; }).join("");
   const recs = balanceRecs(tgtK, rows), focus = S.data.focus[tgtK] || [], full = focus.length >= 3;
   const inFocus = x => focus.some(f => (x.taskId && f.taskId === x.taskId) || f.t === x.t);
@@ -2286,7 +2293,7 @@ function renderBalance() {
     ? (busy ? `<p class="note" style="margin:0">${isT ? "Сегодня" : "Завтра"} вечер — ${esc(st.busyLabel)}, поэтому одно короткое дело.</p>` : "")
       + recs.map(r => {
         const j = (S.balAlt[r.s] || 0) % r.ideas.length, x = r.ideas[j], i = S.balIdeas.push({ ...x, s: r.s }) - 1, on = inFocus(x);
-        return `<div class="pick"><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "late-t" : ""}">${agoText(r)} · ${r.touched} из ${r.norm}</span>
+        return `<div class="pick"><div class="br-h"><b>${esc(r.s)}</b><span class="${r.late ? "late-t" : ""}">${agoText(r)}${r.onDemand ? "" : ` · ${r.touched} из ${r.norm}`}</span>
           ${r.ideas.length > 1 ? `<button type="button" class="alt" data-balt="${esc(r.s)}" aria-label="Другое дело для сферы «${esc(r.s)}» (${j + 1} из ${r.ideas.length})" title="Другое дело">↻</button>` : ""}</div>
           <button type="button" class="pi${x.from === "idea" ? " idea" : ""}${on ? " on" : ""}" data-badd="${i}" aria-pressed="${on}" ${!on && full ? "disabled" : ""} aria-label="${on ? "Убрать из главного" : "Добавить в главное"}: ${esc(x.t)}"><span>${esc(x.t)}<small>${esc(fromLine(x))}</small></span><span class="plus">${on ? "✓" : "+"}</span></button></div>`;
       }).join("")
@@ -2301,9 +2308,10 @@ function renderBalanceStats(rows) {
   $("#bl-skew").className = "bal-skew" + (skew ? "" : " ok");
   $("#bl-skew").hidden = !skew && !ok;
   if (!document.activeElement?.closest?.("#bl-list"))
-    $("#bl-list").innerHTML = rows.map(r => `<li class="${battCls(pctOf(r))}"><span class="bn">${esc(r.s)}</span>${batt(r)}<b class="bp">${pctOf(r)}%</b>
-      <span class="bs">${r.touched} из</span>
-      <select class="field mini" data-norm="${esc(r.s)}" aria-label="Норма для сферы «${esc(r.s)}», дней в неделю">${[1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === r.norm ? "selected" : ""}>${n}</option>`).join("")}</select></li>`).join("");
+    $("#bl-list").innerHTML = rows.map(r => `<li class="${r.onDemand ? "od" : battCls(pctOf(r))}"><span class="bn">${esc(r.s)}</span>${r.onDemand
+        ? `<span class="od-t">${r.touched ? `было ${r.touched} ${plural(r.touched, "день", "дня", "дней")} за неделю` : "без ритма — когда есть дело"}</span>`
+        : `${batt(r)}<b class="bp">${pctOf(r)}%</b><span class="bs">${r.touched} из</span>`}
+      <select class="field mini" data-norm="${esc(r.s)}" aria-label="Норма для сферы «${esc(r.s)}», дней в неделю">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === r.norm ? "selected" : ""}>${n || "по делу"}</option>`).join("")}</select></li>`).join("");
   $("#bl-care").innerHTML = careChips(tk);
   renderBalanceLists(); renderBalanceTags();
 }

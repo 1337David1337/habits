@@ -178,3 +178,11 @@ test("календарь подъёмов: свой подъём виден и �
   await open(page, { hash: "sleep", time: "07:10", data });
   await expect(page.locator('#kcal .kc-c.me[data-tip*="ты встал в 6:50"]')).toHaveCount(1);
 });
+
+test("баланс: сфера «по делу» без дел не подсвечивается и не лезет в упор", async ({ page }) => {
+  await open(page);
+  await expect(page.locator("#bal-batts")).not.toContainText("здоровье");
+  await expect(page.locator("#bal-rec")).not.toContainText("здоровье", { ignoreCase: true });
+  await page.goto("/#plan");
+  await expect(page.locator("#bl-list li.od", { hasText: "здоровье" })).toContainText("без ритма");
+});
