@@ -834,7 +834,10 @@ function renderKidCal(fc, target) {
         const zz = (a + SLOT / 2 - fc.pred) / sigma, dens = Math.exp(-zz * zz / 2);
         const lv = dens > .75 ? 4 : dens > .4 ? 3 : dens > .15 ? 2 : dens > .03 ? 1 : 0;
         if (lv) cls.push("f" + lv);
-        tip = `${fmtShort.format(d)} · ${hm(a)}–${hm(z)}${lv >= 3 ? " · самое вероятное время" : lv ? " · возможно" : ""}`;
+        // Свой подъём рисуем и в день прогноза — он уже мог случиться
+        const me = meWakeOf(k), meHere = me != null && me >= a && me < z;
+        if (meHere) cls.push("me");
+        tip = `${fmtShort.format(d)} · ${meHere ? `ты встал в ${hm(me)} · ` : ""}${hm(a)}–${hm(z)}${lv >= 3 ? " · самое вероятное время" : lv ? " · возможно" : ""}`;
       } else if (d <= todayDate()) {
         const w = wakeOf(k), me = meWakeOf(k), x = m.btMap.get(k), c = x ? m.comb(x) : null;
         if (c != null && m.half && z > c - m.half && a < c + m.half) cls.push("band");

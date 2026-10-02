@@ -171,3 +171,10 @@ test("молитва: пробуждение ненадолго посреди �
   await open(page, { hash: "prayer", time: "08:30", data });
   await expect(page.locator("#ps-when li").first()).toContainText("Тёма проснулся в 8:04, посреди молитвы");
 });
+
+test("календарь подъёмов: свой подъём виден и в день прогноза", async ({ page }) => {
+  const data = fixture();
+  data.me[TODAY] = { wake: "06:50" };
+  await open(page, { hash: "sleep", time: "07:10", data });
+  await expect(page.locator('#kcal .kc-c.me[data-tip*="ты встал в 6:50"]')).toHaveCount(1);
+});
