@@ -1141,6 +1141,7 @@ function renderManage() {
       <select class="field" id="s-${esc(h.id)}" data-act="sphere" ${can ? "" : "disabled"}>${sphereOptions(h.sphere)}</select>
       <label class="sr" for="t-${esc(h.id)}">Норма</label>
       <select class="field" id="t-${esc(h.id)}" data-act="target" ${can ? "" : "disabled"}>${targetOptions(h.target || 1)}</select>
+      <label class="rt" title="Рутина не засчитывается в баланс сфер"><input type="checkbox" data-act="routine" ${h.routine ? "checked" : ""} ${can ? "" : "disabled"}> рутина</label>
       <button type="button" class="btn ghost" data-act="up" aria-label="Выше" ${can && i > 0 ? "" : "disabled"}>↑</button>
       <button type="button" class="btn ghost" data-act="down" aria-label="Ниже" ${can && i < hs.length - 1 ? "" : "disabled"}>↓</button>
       <button type="button" class="btn ghost" data-act="archive" ${can ? "" : "disabled"}>В архив</button>
@@ -1756,6 +1757,7 @@ $("#mlist").addEventListener("change", e => {
   }
   else if (a === "sphere") op({ t: "habit", id: hid, data: { sphere: el.value } });
   else if (a === "target") op({ t: "habit", id: hid, data: { target: Number(el.value) } });
+  else if (a === "routine") op({ t: "habit", id: hid, data: { routine: el.checked } });
 });
 $("#mlist").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.act === "rename") e.target.blur(); });
 $("#mlist").addEventListener("focusout", () => setTimeout(() => { if (!document.activeElement?.closest?.("#mlist")) renderManage(); }, 0));
@@ -2133,14 +2135,15 @@ function toggleFocus(i) {
 // Сфера задачи угадывается по словам названия; ручная правка хранится в tags.<id задачи>.
 // Слово с «=» совпадает только целиком, остальные — как начало слова.
 const SPHERE_ALIASES = {
-  "работа": ["работа", "карьера", "рост", "учеба", "профессия"], "жена": ["жена", "брак", "муж"],
+  "работа": ["работа", "карьера", "профессия"], "рост": ["рост", "саморазвитие", "развитие", "учеба", "обучение"], "жена": ["жена", "брак", "муж"],
   "ребенок": ["ребенок", "дети", "сын", "дочь"], "церковь": ["церковь", "вера", "служение", "бог"],
   "деньги": ["деньги", "финансы"], "здоровье": ["здоровье", "спорт", "тело"], "дом": ["дом", "быт", "квартира"], "машина": ["машина", "авто", "автомобиль"], "семья": ["семья"],
   "родные": ["родные", "родня", "родственники", "родители"],
 };
 const SPHERE_WORDS = {
-  "работа": ["=работа", "=работе", "=работу", "=работы", "рабоч", "тест", "автотест", "автоматиз", "python", "питон", "pytest", "sql", "postman", "курс", "урок", "=дз", "=вш",
-    "учеб", "книг", "читат", "прочит", "резюме", "собес", "англ", "english", "jira", "ревью", "созвон", "отчет", "вебинар", "лекци", "затрек", "трекат", "ворклог", "worklog", "=qa", "тестиров"],
+  "работа": ["=работа", "=работе", "=работу", "=работы", "рабоч", "тест", "jira", "ревью", "созвон", "отчет", "затрек", "трекат", "ворклог", "worklog", "=qa", "баг", "релиз", "спринт", "митинг"],
+  "рост": ["автотест", "автоматиз", "python", "питон", "pytest", "sql", "postman", "курс", "урок", "=дз", "=вш", "учеб", "книг", "читат", "прочит",
+    "резюме", "собес", "англ", "english", "вебинар", "лекци", "skill", "навык"],
   "жена": ["жен", "свидан", "вдвоем", "цвет", "подар", "годовщин", "кафе", "ресторан"],
   "ребенок": ["ребен", "сын", "малыш", "детск", "=дети", "детей", "коляск", "прививк", "педиатр", "игрушк", "подгуз", "памперс", "пюре", "садик"],
   "церковь": ["церк", "служен", "молит", "молил", "молис", "библи", "проповед", "пастор", "=хор", "поклонен", "общин", "=дг"],
@@ -2155,6 +2158,7 @@ const SPHERE_WORDS = {
   "родные": ["мам", "=папа", "=папе", "=папы", "=папу", "папин", "родител", "брат", "сестр", "бабушк", "дедушк", "тещ", "свекр", "родн", "родствен", "=тетя", "=тете", "=тети", "дяд", "племян"],
 };
 SPHERE_WORDS["семья"] = [...SPHERE_WORDS["жена"], ...SPHERE_WORDS["ребенок"], "мам", "пап", "родител", "брат", "сестр", "бабушк", "дедушк", "семь"];
+const WORDS_FALLBACK = { "машина": "дом", "рост": "работа", "работа": "рост" };
 const normRu = s => String(s || "").toLowerCase().replace(/ё/g, "е");
 const canonOf = s => { const n = normRu(s).trim(); return Object.keys(SPHERE_ALIASES).find(k => SPHERE_ALIASES[k].includes(n)) || null; };
 const sphereByCanon = c => (settings().spheres || []).find(s => canonOf(s) === c) || null;
@@ -2163,8 +2167,8 @@ function sphereOfText(text) {
   let best = null, top = 0;
   for (const s of settings().spheres || []) {
     const c = canonOf(s), stems = c ? [...SPHERE_WORDS[c] || [], "=" + normRu(s)] : [normRu(s).slice(0, 5)];
-    // нет отдельной сферы «машина» — дела с машиной считаются домашними
-    if (c === "дом" && !sphereByCanon("машина")) stems.push(...SPHERE_WORDS["машина"]);
+    // нет отдельной сферы (например, «машина») — её слова достаются соседней («дом»)
+    for (const [x, to] of Object.entries(WORDS_FALLBACK)) if (to === c && !sphereByCanon(x)) stems.push(...SPHERE_WORDS[x]);
     if ((c === "ребенок" || c === "семья") && kid.length > 2) stems.push(kid);
     const hits = words.filter(w => stems.some(st => st[0] === "=" ? w === st.slice(1)
       : st === kid ? w.startsWith(st) && w.length <= st.length + 2 : w.startsWith(st))).length;
@@ -2181,17 +2185,21 @@ function taskSphere(x) {
   return (p && taskSphere(p)) || listSphere(x.list) || sphereOfText(x.title) || sphereOfText(x.list);
 }
 // Что было сделано в каждой сфере по дням: { сфера: { дата: [что] } }
-function sphereActivity(from, to) {
+// Рутина (привычка с пометкой routine) в баланс не засчитывается: видна в сетке бледно, но не даёт «X из N» и перевеса
+function sphereActivity(from, to, routine) {
   const st = settings(), act = {}, tk = ymd(todayDate());
   (st.spheres || []).forEach(s => { act[s] = {}; });
   const put = (s, k, what) => { if (s && act[s] && k >= from && k <= to) (act[s][k] ||= []).push(what); };
   const goalSphere = id => (S.data.goals || []).find(g => g.id === id)?.sphere || null;
   for (const [k, day] of Object.entries(S.data.log)) for (const hid of Object.keys(day)) {
-    const h = habits().find(x => x.id === hid); if (h) put(h.sphere, k, h.name);
+    const h = habits().find(x => x.id === hid); if (h && !!h.routine === !!routine) put(h.sphere, k, h.name);
   }
   const wife = sphereByCanon("жена") || sphereByCanon("семья"), church = sphereByCanon("церковь");
+  // молитва идёт внутри своей привычки — и считается так же, как она
+  const prRoutine = !!habits().find(h => h.id === prHabitId())?.routine;
+  if (prRoutine === !!routine) Object.keys(S.data.prayer).forEach(k => put(church, k, "молитва"));
+  if (routine) return act;
   Object.keys(S.data.together).forEach(k => put(wife, k, "время вдвоём"));
-  Object.keys(S.data.prayer).forEach(k => put(church, k, "молитва"));
   const busyS = (st.spheres || []).find(s => normRu(s) === normRu(st.busyLabel)) || null;
   for (let d = parse(from); ymd(d) <= to; d = addDays(d, 1)) {
     const k = ymd(d);
@@ -2208,17 +2216,18 @@ function sphereActivity(from, to) {
 // Норма внимания — сколько дней в неделю сфере нужно время; своя норма хранится в settings.sphereNorms.
 // 0 — сфера «по делу»: ей не нужно время по ритму (здоровье, когда никто не болеет; дом, когда ничего не сломалось),
 // она без заряда и попадает в «Упор» только при настоящем деле — задаче со сроком или шаге цели
-const NORM_DEFAULT = { "жена": 5, "ребенок": 6, "семья": 5, "церковь": 3, "работа": 3, "деньги": 3, "здоровье": 0, "дом": 0, "родные": 0, "машина": 0 };
-const normOf = s => settings().sphereNorms?.[s] ?? NORM_DEFAULT[canonOf(s)] ?? 2;
+const NORM_DEFAULT = { "жена": 5, "ребенок": 6, "семья": 5, "церковь": 3, "работа": 3, "рост": 3, "деньги": 3, "здоровье": 0, "дом": 0, "родные": 0, "машина": 0 };
+// рядом с «ростом» работа — сфера «когда нужно»: рабочие часы и так заняты работой
+const normOf = s => settings().sphereNorms?.[s] ?? (canonOf(s) === "работа" && sphereByCanon("рост") ? 0 : NORM_DEFAULT[canonOf(s)] ?? 2);
 function balance(tgtK) {
-  const tk = ymd(todayDate()), act = sphereActivity(addDaysK(tk, -29), tk);
+  const tk = ymd(todayDate()), act = sphereActivity(addDaysK(tk, -29), tk), rut = sphereActivity(addDaysK(tk, -6), tk, true);
   const week = Array.from({ length: 7 }, (_, i) => addDaysK(tk, i - 6));
   return (settings().spheres || []).map(s => {
     const days = act[s], keys = Object.keys(days).sort(), last = keys[keys.length - 1] || null;
     const norm = normOf(s), gap = norm ? Math.ceil(7 / norm) : Infinity, touched = week.filter(k => days[k]).length;
     const ago = last ? Math.round((parse(tgtK) - parse(last)) / 864e5) : null;
     // пора — по норме сфере уже нужно время; отстаёт — пропущено два своих промежутка подряд
-    return { s, days, week: week.map(k => ({ k, what: days[k] || null })), touched, last, ago, norm, gap, onDemand: !norm,
+    return { s, days, week: week.map(k => ({ k, what: days[k] || null, rut: rut[s][k] || null })), touched, last, ago, norm, gap, onDemand: !norm,
       due: !!norm && (ago == null || ago >= gap), late: !!norm && (ago == null || ago >= gap * 2), deficit: Math.max(0, norm - touched) };
   });
 }
@@ -2238,12 +2247,13 @@ function sphereIdeas(s, tgtK) {
       .forEach(x => out.push({ t: x.title, from: "task", src: taskSrc(x), taskId: x.id, listId: x.listId, due: effDue(x) }));
   }
   goalsActive().filter(g => g.sphere === s).forEach(g => { const nx = nextStepOf(g); if (nx && !has(nx.text)) out.push({ t: nx.text, from: "goal", src: `«${g.title}»`, goal: g.id, stepId: nx.stepId || null }); });
-  active().filter(h => h.sphere === s).forEach(h => {
+  active().filter(h => h.sphere === s && !h.routine).forEach(h => {
     const n = weekCount(h, monday(parse(tgtK))), tgt = h.target || 1;
     if (n < tgt) out.push({ t: h.name, from: "habit", src: `${n} из ${tgt} за неделю`, habit: h.id });
   });
   const IDEA = {
-    "работа": "30 минут на рост в профессии: курс, автотесты или книга",
+    "работа": sphereByCanon("рост") ? "Одно рабочее дело, которое давно висит" : "30 минут на рост в профессии: курс, автотесты или книга",
+    "рост": "30 минут на рост: курс, автотесты или книга",
     "ребенок": `Полчаса для ${kidGen()} без телефона: прогулка, игра, купание`,
     "церковь": "Написать или позвонить кому-то из домашней группы",
     "деньги": "10 минут на деньги: записать траты, сверить бюджет",
@@ -2342,7 +2352,7 @@ function renderBalanceStats(rows) {
     + rows.map((r, i) => {
       const st = weekState(r);
       return `<span class="bg-n${r.onDemand ? " od" : ""}">${esc(r.s)}</span>`
-        + r.week.map((d, j) => `<button type="button" class="bg-c${d.what ? " on" : ""}" data-bg="${i}:${j}" style="--i:${i + j}" data-tip="${esc(`${capF(dayLabel(d.k))} · ${d.what ? [...new Set(d.what)].join(", ") : "не было"}`)}" aria-label="${esc(r.s)}, ${dayLabel(d.k)}: ${d.what ? esc([...new Set(d.what)].join(", ")) : "не было"}"></button>`).join("")
+        + r.week.map((d, j) => `<button type="button" class="bg-c${d.what ? " on" : d.rut ? " rut" : ""}" data-bg="${i}:${j}" style="--i:${i + j}" data-tip="${esc(`${capF(dayLabel(d.k))} · ${cellText(d)}`)}" aria-label="${esc(r.s)}, ${dayLabel(d.k)}: ${esc(cellText(d))}"></button>`).join("")
         + `<span class="bg-s ${st.cls}">${r.onDemand ? "" : `<b>${r.touched}</b> из ${r.norm}`}<small>${st.t}</small></span>`;
     }).join(""));
   $("#bl-care").innerHTML = careChips(tk);
@@ -2350,12 +2360,13 @@ function renderBalanceStats(rows) {
     $("#bal-norms ul").innerHTML = rows.map(r => `<li><span>${esc(r.s)}</span><select class="field mini" data-norm="${esc(r.s)}" aria-label="Сколько дней в неделю нужно сфере «${esc(r.s)}»">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${n === r.norm ? "selected" : ""}>${n ? `${dayWord(n)} в неделю` : "когда нужно"}</option>`).join("")}</select></li>`).join("");
   renderBalanceLists(); renderBalanceTags();
 }
+const cellText = d => [d.what ? [...new Set(d.what)].join(", ") : d.rut ? "" : "не было", d.rut ? `рутина, не в счёт: ${[...new Set(d.rut)].join(", ")}` : ""].filter(Boolean).join(" · ");
 function balDetail(i, j) {
   const r = S.balRows?.[i], d = r?.week[j];
   if (!d) return;
   $("#bl-list").querySelectorAll(".bg-c.sel").forEach(c => c.classList.remove("sel"));
   $(`#bl-list [data-bg="${i}:${j}"]`)?.classList.add("sel");
-  const what = d.what ? [...new Set(d.what)].join(", ") : "ничего не засчиталось";
+  const what = d.what ? cellText(d) : `ничего не засчиталось${d.rut ? ` (рутина: ${[...new Set(d.rut)].join(", ")})` : ""}`;
   const tail = r.onDemand ? "Сфера без ритма: Keel предложит её, когда есть дело со сроком."
     : r.touched ? `За неделю ${r.touched} из ${r.norm}.` : `За неделю ни разу${r.last ? `, последний раз ${dayLabel(r.last)}` : ""}. Нужно ${dayWord(r.norm)} в неделю.`;
   $("#bl-detail").innerHTML = `<b>${esc(capF(r.s))}, ${dayLabel(d.k)}:</b> ${esc(what)}. ${tail}`;

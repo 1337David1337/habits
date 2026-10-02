@@ -199,6 +199,20 @@ test("сферы задач: мама — к родным, а не к работ
   await expect(page.locator('#bal-tags select[data-tag="t1"]')).toHaveValue("рост");
 });
 
+test("баланс: рутина видна, но не засчитывается; рабочие дела — в «работу», а не в «рост»", async ({ page }) => {
+  const data = fixture();
+  data.habits.find(h => h.id === "money").routine = true;
+  data.settings.spheres = ["рост", "работа", "жена", "ребёнок", "церковь", "деньги", "здоровье", "дом"];
+  await open(page, { hash: "plan", data });
+  const row = page.locator("#bl-list .bg-n", { hasText: "деньги" });
+  await expect(row).toHaveCount(1);
+  await expect(page.locator('#bl-list .bg-c.rut[data-tip*="Записать траты"]')).toHaveCount(3);
+  await expect(page.locator('#bl-list .bg-c.on[data-tip*="Записать траты"]')).toHaveCount(0);
+  await expect(page.locator("#bl-list .bg-n.od", { hasText: "работа" })).toHaveCount(1);
+  await page.locator("#bal-tags summary").click();
+  await expect(page.locator('#bal-tags select[data-tag="t1"]')).toHaveValue("рост");
+});
+
 test("баланс: клетка недели объясняет, что засчиталось, а лодка в «Итогах» видна", async ({ page }) => {
   await open(page, { hash: "plan" });
   const cell = page.locator("#bl-list .bg-c.on").first();

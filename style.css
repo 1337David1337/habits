@@ -826,6 +826,7 @@ ul.needs { list-style:none; margin:10px 0 0; padding:0; }
 .bg-c { aspect-ratio:1; min-width:0; border:0; padding:0; border-radius:7px; background:var(--field); animation:bg-in .4s cubic-bezier(.3,1.6,.5,1) both; animation-delay:calc(var(--i) * 30ms); }
 .bg-c.on { background:var(--teal); }
 .bg-n.od ~ .bg-c.on { background:var(--s2); }
+.bg-c.rut { background:var(--field); box-shadow:inset 0 0 0 1.5px var(--s2); }
 .bg-c.sel { outline:2px solid var(--ink); outline-offset:1px; }
 @keyframes bg-in { from { transform:scale(.3); opacity:0; } }
 .bg-s { font-size:12.5px; text-align:right; line-height:1.25; white-space:nowrap; }
@@ -856,3 +857,5 @@ ul.needs { list-style:none; margin:10px 0 0; padding:0; }
 .keel-sides b { display:block; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--faint); }
 .keel-sides span { color:var(--faint); }
 @media (prefers-reduced-motion:reduce) { .rg .rg-a, .bg-c, .keel .tilt, .keel .bob, .keel .w1, .keel .w2 { animation:none; } }
+.rt { display:inline-flex; align-items:center; gap:5px; font-size:13px; color:var(--soft); white-space:nowrap; }
+.rt input { accent-color:var(--teal); }

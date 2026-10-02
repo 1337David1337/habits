@@ -36,8 +36,8 @@
         prayerPlan: ["Поклонение", "Покаяние", "Благодарность", "Нужды"],
       },
       habits: [
-        { id: "bible", name: "Библия и молитва утром", sphere: "церковь", target: 6, order: 1, archived: false, created: day(-60) },
-        { id: "money", name: "Записать траты", sphere: "деньги", target: 7, order: 2, archived: false, created: day(-60) },
+        { id: "bible", name: "Библия и молитва утром", sphere: "церковь", target: 6, routine: true, order: 1, archived: false, created: day(-60) },
+        { id: "money", name: "Записать траты", sphere: "деньги", target: 7, routine: true, order: 2, archived: false, created: day(-60) },
         { id: "read", name: "Читать 10 страниц", sphere: "работа", target: 5, order: 3, archived: false, created: day(-60) },
         { id: "gym", name: "Зарядка", sphere: "здоровье", target: 3, order: 4, archived: false, created: day(-60) },
       ],
