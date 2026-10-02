@@ -189,13 +189,13 @@ test("баланс: сфера «по делу» без дел не подсве
   await expect(page.locator("#bl-list .bg-n.od", { hasText: "здоровье" })).toHaveCount(1);
 });
 
-test("сферы задач: мама — к родным, а не к работе; kia — к дому", async ({ page }) => {
+test("сферы задач: мама — к родным, а не к работе; kia — к машине", async ({ page }) => {
   const data = fixture();
-  data.settings.spheres = ["рост", "жена", "ребёнок", "церковь", "деньги", "здоровье", "дом", "родные"];
+  data.settings.spheres = ["рост", "жена", "ребёнок", "церковь", "деньги", "здоровье", "дом", "родные", "машина"];
   await open(page, { hash: "plan", data });
   await page.locator("#bal-tags summary").click();
   await expect(page.locator('#bal-tags select[data-tag="m1"]')).toHaveValue("родные");
-  await expect(page.locator('#bal-tags select[data-tag="k1"]')).toHaveValue("дом");
+  await expect(page.locator('#bal-tags select[data-tag="k1"]')).toHaveValue("машина");
   await expect(page.locator('#bal-tags select[data-tag="t1"]')).toHaveValue("рост");
 });
 
